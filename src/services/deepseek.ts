@@ -23,11 +23,13 @@ export interface ChatResponse {
  */
 export async function chatWithNPC(
   systemPrompt: string,
+  history: ChatMessage[],
   userMessage: string,
   apiKey: string
 ): Promise<ChatResponse> {
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
+    ...history,
     { role: 'user', content: userMessage }
   ];
 
@@ -40,6 +42,7 @@ export async function chatWithNPC(
   // 记录 API 调用请求信息
   logApiCall(`API 调用: chatWithNPC (NPC: ${extractNpcName(systemPrompt)})`, {
     systemPrompt,
+    historyCount: history.length,
     userMessage,
     config,
   });
@@ -123,7 +126,7 @@ export async function chatWithContext(
   if (!response.ok) {
     const error = await response.json();
     const errorMsg = error.error?.message || 'API请求失败';
-    logError(`API 调用失败 (chatWithContext): ${errorMsg}`, JSON.stringify({ status: response.status, config }, null, 2));
+    logApiError(`API 调用失败 (chatWithContext): ${errorMsg}`, JSON.stringify({ status: response.status, config }, null, 2));
     throw new Error(errorMsg);
   }
 

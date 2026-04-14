@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import type { Marker } from '../../types';
 import { useDialogueStore } from '../../store/dialogueStore';
 import { usePlayerStore } from '../../store/playerStore';
+import { useScriptStore } from '../../store/scriptStore';
 
 interface NpcMarkerProps {
   marker: Marker;
@@ -24,8 +25,8 @@ const NpcMarker: React.FC<NpcMarkerProps> = ({ marker }) => {
 
   const handleClick = () => {
     if (inRange && marker.interactable) {
-      // 使用 LLM 对话模式
-      openLLMDialogue(marker.id, marker.name || 'NPC');
+      const npcSystemPrompt = useScriptStore.getState().getNpcSystemPrompt(marker.id);
+      openLLMDialogue(marker.id, marker.name || 'NPC', npcSystemPrompt || undefined);
     }
   };
 

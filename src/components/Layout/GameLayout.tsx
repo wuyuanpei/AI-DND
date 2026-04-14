@@ -9,6 +9,7 @@ import Settings from '../Settings/Settings';
 import Rules from '../Rules/Rules';
 import Inventory from '../Inventory/Inventory';
 import GameLogs from '../GameLogs/GameLogs';
+import ScriptManager from '../ScriptManager/ScriptManager';
 import { saveGame, loadGame } from '../../store/saveSystem';
 import { useSettingsStore } from '../../store/settingsStore';
 
@@ -53,6 +54,8 @@ const GameLayout: React.FC = () => {
       <Rules />
       {/* 日志按钮 - 规则按钮左边 */}
       <GameLogs />
+      {/* 剧本按钮 - 日志按钮左边 */}
+      <ScriptManager />
 
       {/* 主容器 */}
       <div className="flex flex-col gap-4 bg-gray-800 rounded-lg p-4">

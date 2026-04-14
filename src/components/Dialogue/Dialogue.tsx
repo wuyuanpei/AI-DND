@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useScriptStore } from '../../store/scriptStore';
 import { chatWithNPC } from '../../services/deepseek';
+import type { ChatMessage } from '../../services/deepseek';
 import type { DialogueMessage } from '../../types';
 
 const Dialogue: React.FC = () => {
@@ -39,7 +41,12 @@ const Dialogue: React.FC = () => {
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!isOpen) {
-      openLLMDialogue(DM_NPC_ID, 'DM');
+      const scriptStore = useScriptStore.getState();
+      const dmPrompt = scriptStore.getDmSystemPrompt();
+      const systemPrompt = dmPrompt
+        ? `${dmPrompt}\n\n请用中世纪奇幻风格与玩家互动，保持简短（不超过 50 字）。`
+        : undefined;
+      openLLMDialogue(DM_NPC_ID, 'DM', systemPrompt);
     }
   }, []);
 
@@ -60,13 +67,41 @@ const Dialogue: React.FC = () => {
     const currentNpcName = store.npcName;
     const currentActiveTabId = store.activeTabId;
 
+    // 获取历史对话（排除 system 消息）
+    const historyMessages: DialogueMessage[] = store.messages.filter(m => m.role !== 'system');
+
+    // 根据剧本动态构建系统提示词
+    const scriptStore = useScriptStore.getState();
+    let systemPrompt: string;
+
+    if (currentNpcId === DM_NPC_ID) {
+      // DM：优先使用剧本的 dmPrompt
+      const dmPrompt = scriptStore.getDmSystemPrompt();
+      systemPrompt = dmPrompt
+        ? `${dmPrompt}\n\n请用中世纪奇幻风格与玩家互动，保持简短（不超过 50 字）。`
+        : `你是 DND 游戏的地下城主 (DM)。请用中世纪奇幻风格与玩家互动，描述游戏世界、NPC 反应和事件结果。保持简短（不超过 50 字）。`;
+    } else {
+      // NPC：优先使用剧本中该 NPC 的 systemPrompt
+      const npcSystemPrompt = scriptStore.getNpcSystemPrompt(currentNpcId);
+      systemPrompt = npcSystemPrompt
+        ? npcSystemPrompt
+        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+    }
+
     setLoading(true);
     addMessage({ role: 'user', content: userInput });
     setUserInput('');
 
     try {
+      // 将 DialogueMessage 转换为 ChatMessage 格式（npc 角色转为 assistant）
+      const history: ChatMessage[] = historyMessages.map(m => ({
+        role: m.role === 'npc' ? 'assistant' : m.role,
+        content: m.content
+      }));
+
       const response = await chatWithNPC(
-        `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`,
+        systemPrompt,
+        history,
         userInput,
         deepseekApiKey
       );

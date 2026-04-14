@@ -331,6 +331,98 @@ export interface Item {
 const systemPrompt = `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
 ```
 
+## 剧本格式
+
+剧本是一个 `.md` 文件，通过右上角「📖 剧本」按钮导入。文件格式由 **YAML frontmatter** + **Markdown 正文** 两部分组成。
+
+### YAML frontmatter（必须）
+
+位于文件顶部，用 `---` 分隔。包含以下字段：
+
+| 字段 | 类型 | 必须 | 说明 |
+|------|------|------|------|
+| `title` | string | ✅ | 剧本标题 |
+| `description` | string | ❌ | 剧本简介 |
+| `author` | string | ❌ | 作者名 |
+| `dmPrompt` | string (多行) | ✅ | 给 DM 的提示词，作为 DM 对话的上下文 |
+| `acts` | array | ❌ | 幕列表（见下方结构） |
+| `npcs` | array | ❌ | NPC 列表（见下方结构） |
+
+### `acts` 结构
+
+每幕是一个对象：
+
+| 字段 | 类型 | 必须 | 说明 |
+|------|------|------|------|
+| `id` | string | ❌ | 幕的唯一标识（如 `act1`） |
+| `title` | string | ❌ | 幕标题 |
+| `synopsis` | string | ❌ | 幕概要 |
+
+### `npcs` 结构
+
+每个 NPC 是一个对象：
+
+| 字段 | 类型 | 必须 | 说明 |
+|------|------|------|------|
+| `id` | string | ❌ | NPC 的唯一标识，需与地图 Marker 的 `id` 匹配才能生效 |
+| `name` | string | ❌ | NPC 显示名称 |
+| `personality` | string | ❌ | 性格描述 |
+| `background` | string | ❌ | 背景故事 |
+| `dialogueStyle` | string | ❌ | 对话风格描述 |
+| `systemPrompt` | string (多行) | ❌ | 给该 NPC 的完整系统提示词，将替代默认提示发送给 LLM |
+| `stats` | object | ❌ | 四维能力数值（见下方结构） |
+
+### `stats` 结构
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `strength` | number | 10 | 力量 |
+| `agility` | number | 10 | 敏捷 |
+| `intelligence` | number | 10 | 智力 |
+| `charisma` | number | 10 | 魅力 |
+
+### Markdown 正文（可选）
+
+`---` 分隔符之后是剧本的 Markdown 正文，包含剧情描述、场景、对话等内容。这部分不会发送给 LLM，仅用于创作者参考和剧本管理面板中预览。
+
+### 示例文件
+
+参考项目中的 `src/data/example-script.md`，包含完整的三幕剧情和 10 个 NPC。
+
+### 示例格式
+
+```markdown
+---
+title: "剧本标题"
+description: "剧本简介"
+author: "作者名"
+acts:
+  - id: act1
+    title: "第一幕标题"
+    synopsis: "第一幕概要"
+dmPrompt: |
+  给DM的提示词，作为DM对话的上下文
+  可以多行书写
+npcs:
+  - id: npc_elder
+    name: "村长"
+    personality: "性格描述"
+    background: "背景故事"
+    dialogueStyle: "对话风格"
+    systemPrompt: |
+      给该NPC的完整系统提示词
+      将替代默认提示发送给LLM
+    stats:
+      strength: 8
+      agility: 5
+      intelligence: 12
+      charisma: 10
+---
+
+# 第一幕
+剧情正文...
+```
+
 ## 最近修改
 
 ### Tab 对话系统

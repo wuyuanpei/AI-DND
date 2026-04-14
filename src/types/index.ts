@@ -116,3 +116,37 @@ export interface DialogueData {
   nodes: DialogueNode[];
   startNode: string;
 }
+
+// 剧本系统
+export interface ScriptNPCStats {
+  strength: number;
+  agility: number;
+  intelligence: number;
+  charisma: number;
+}
+
+export interface ScriptNPC {
+  id: string;
+  name: string;
+  personality: string;
+  background: string;
+  dialogueStyle: string;
+  systemPrompt: string;
+  stats: ScriptNPCStats;
+}
+
+export interface ScriptAct {
+  id: string;
+  title: string;
+  synopsis: string;
+}
+
+export interface ParsedScript {
+  title: string;
+  description: string;
+  author: string;
+  acts: ScriptAct[];
+  dmPrompt: string;
+  npcs: ScriptNPC[];
+  body: string;
+}

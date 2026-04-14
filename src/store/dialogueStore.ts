@@ -31,7 +31,7 @@ interface DialogueState {
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
-  openLLMDialogue: (npcId: string, npcName: string) => void;
+  openLLMDialogue: (npcId: string, npcName: string, systemPrompt?: string) => void;
   closeDialogue: () => void;
   selectChoice: (choiceIndex: number) => void;
   addMessage: (message: DialogueMessage) => void;
@@ -156,7 +156,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
     });
   },
 
-  openLLMDialogue: (npcId, npcName) => {
+  openLLMDialogue: (npcId, npcName, systemPrompt) => {
     const state = get();
 
     // 检查是否已存在该 NPC 的标签
@@ -212,7 +212,11 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
       });
     }
 
-    // 创建新的对话
+    // 创建新的对话，优先使用传入的系统提示词
+    const defaultPrompt = npcId === DM_NPC_ID
+      ? '你是 DND 游戏的地下城主 (DM)。请用中世纪奇幻风格与玩家互动，描述游戏世界、NPC 反应和事件结果。保持简短（不超过 50 字）。'
+      : `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+
     return set({
       isOpen: true,
       mode: 'llm',
@@ -221,7 +225,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
       currentNodeId: null,
       nodes: [],
       messages: [
-        { role: 'system', content: `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。` }
+        { role: 'system', content: systemPrompt ?? defaultPrompt }
       ],
       activeTabId: npcId
     });
