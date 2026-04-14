@@ -118,6 +118,23 @@ interface MapData {
 - temperature: 0.7
 - max_tokens: 100
 
+**返回格式：**
+```typescript
+interface ChatResponse {
+  content: string;           // AI 回复内容
+  usage: {
+    promptTokens: number;        // 输入 token 数
+    completionTokens: number;    // 输出 token 数
+    totalTokens: number;         // 总 token 数
+  }
+}
+```
+
+**API 统计：**
+- 自动统计调用次数和 token 消耗量
+- 数据持久化到 localStorage
+- 在游戏界面底部实时显示
+
 ### 6. 存档系统 (`src/store/saveSystem.ts`)
 
 使用 LocalStorage 保存游戏进度。
@@ -131,6 +148,24 @@ interface MapData {
 **API Key 持久化：**
 - 单独存储在 `ai-dnd-deepseek-api-key`
 - 重启后仍然存在
+
+### 7. 对话系统特性 (`src/store/dialogueStore.ts`)
+
+**Tab 多对话管理：**
+- 默认 DM 标签页（始终存在，无法关闭）
+- NPC 标签页动态创建，可关闭
+- 每个 NPC 独立的对话历史
+- 切换标签页时保留各自的加载状态
+
+**距离检测：**
+- NPC 在交互范围内（50px）时可对话
+- 离开范围后输入框禁用，显示"已离开"提示
+- DM 始终可对话（不受距离限制）
+
+**异步处理：**
+- 请求时保存当前 NPC ID，防止切换导致消息错乱
+- 每个 NPC 独立的 loading 状态
+- "思考中..."与对应标签页绑定
 
 ## 可配置选项
 
@@ -167,6 +202,21 @@ const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 // 可在 chatWithNPC 函数中调整：
 // - temperature: 0.7  (创造力，0-2)
 // - max_tokens: 100   (最大输出长度)
+```
+
+### API 统计配置 (`src/store/settingsStore.ts`)
+
+**统计数据持久化：**
+- 存储键：`ai-dnd-api-stats`
+- 包含字段：
+  - `apiCallCount`: API 调用总次数
+  - `totalPromptTokens`: 输入 token 总数
+  - `totalCompletionTokens`: 输出 token 总数
+  - `totalTokens`: token 总消耗量
+
+**重置统计：**
+```typescript
+useSettingsStore.getState().resetStats();  // 清空统计数据
 ```
 
 ### 游戏规则 (`src/data/rules.json`)
@@ -280,6 +330,26 @@ export interface Item {
 ```typescript
 const systemPrompt = `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
 ```
+
+## 最近修改
+
+### Tab 对话系统
+- 添加 DM 永久标签页（游戏主持人，驱动游戏进程）
+- NPC 标签页动态创建，点击 X 关闭
+- 每个 NPC 独立的对话历史和加载状态
+- 距离检测：NPC 离开范围后输入框禁用
+- 异步请求绑定原 NPC ID，防止切换导致消息错乱
+
+### API 统计功能
+- 自动统计 DeepSeek API 调用次数
+- 统计 Prompt/Completion/Total Token 消耗
+- 数据持久化到 localStorage
+- 界面底部实时显示统计信息
+
+### 其他优化
+- 修复切换标签页时消息丢失问题
+- 修复思考中状态与标签页绑定
+- 移除隐藏标签页功能，简化交互
 
 ## 许可证
 
