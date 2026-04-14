@@ -18,7 +18,7 @@ const Rules: React.FC = () => {
     <>
       {/* 规则按钮 - 设置按钮左边 */}
       <button
-        className="fixed top-4 right-16 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50"
+        className="fixed top-4 right-24 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50"
         onClick={() => setIsOpen(true)}
       >
         📜 规则
