@@ -99,14 +99,14 @@ const Map: React.FC = () => {
 
   if (!mapData) {
     return (
-      <div className="w-[1024px] h-[1024px] bg-gray-600 flex items-center justify-center">
+      <div className="w-[1024px] h-[768px] bg-gray-600 flex items-center justify-center">
         <span className="text-gray-400">加载地图...</span>
       </div>
     );
   }
 
   return (
-    <div className="relative w-[1024px] h-[1024px] overflow-hidden">
+    <div className="relative w-[1024px] h-[768px] overflow-hidden">
       {/* 背景图 */}
       <img
         src={mapData.background}

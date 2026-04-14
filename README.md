@@ -1,73 +1,286 @@
-# React + TypeScript + Vite
+# AI-DND
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个基于 React + TypeScript + Vite 的 DND 风格角色扮演游戏。使用 DeepSeek API 实现与 NPC 的智能对话。
 
-Currently, two official plugins are available:
+## 技术栈
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19** - UI 框架
+- **TypeScript 6** - 类型系统
+- **Vite 8** - 构建工具
+- **Zustand 5** - 状态管理
+- **TailwindCSS 4** - 样式
 
-## React Compiler
+## 开发
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+# 安装依赖
+npm install
 
-## Expanding the ESLint configuration
+# 启动开发服务器
+npm run dev
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+# 构建生产版本
+npm run build
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# 预览生产构建
+npm run preview
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 核心系统
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 1. 玩家系统 (`src/store/playerStore.ts`)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+管理玩家的所有状态和属性。
+
+**玩家属性：**
+- `name`: 玩家名称
+- `level`: 等级 (1-10)
+- `hp/maxHp`: 生命值
+- `mp/maxMp`: 魔法值
+- `exp`: 经验值
+- `gold`: 金币
+- `strength`: 力量
+- `agility`: 敏捷
+- `intelligence`: 智力
+- `charisma`: 魅力
+
+**装备系统：**
+- 9 个装备槽：头盔、护甲、盾牌、主武器、副武器、远程、上衣、裤子、鞋子
+
+**背包系统：**
+- 20 个格子，使用数字索引存储物品
+- 重量上限：50
+
+**技能系统：**
+- 初始 3 个技能槽，每级 +1
+- 满级 (10 级) 时 12 个技能槽
+- 公式：`技能上限 = 3 + (等级 - 1)`
+
+### 2. 世界系统 (`src/store/worldStore.ts`)
+
+管理地图、NPC、传送门等游戏世界元素。
+
+**地图数据结构：**
+```typescript
+interface MapData {
+  id: string;           // 地图 ID
+  name: string;         // 地图名称
+  background: string;   // 背景图片路径
+  width: number;        // 地图宽度 (默认 1024)
+  height: number;       // 地图高度 (默认 768, 4:3 比例)
+  markers: Marker[];    // 地图上的标记
+  collisions: Collision[]; // 碰撞区域
+}
 ```
+
+**标记类型：**
+- `npc`: NPC 角色
+- `door`: 传送门/门
+- `enemy`: 敌人
+- `player`: 玩家
+- `item`: 物品
+
+### 3. 对话系统 (`src/store/dialogueStore.ts`)
+
+支持两种对话模式：
+- **脚本模式**: 预定义的对话节点和选项
+- **LLM 模式**: 使用 DeepSeek API 进行智能对话
+
+**特性：**
+- 按 NPC 存储对话历史
+- 关闭对话后保留记录
+- 再次对话时恢复历史
+
+### 4. 地图系统 (`src/components/Map/Map.tsx`)
+
+**移动控制：**
+- WASD 或 方向键移动
+- 移动速度可配置
+
+**碰撞检测：**
+- 矩形碰撞区域
+- 圆形碰撞区域
+- 边界检查
+
+**地图标记渲染：**
+- P (蓝色) - 玩家
+- N (黄色) - NPC
+- D (紫色) - 传送门
+- E (红色) - 敌人
+
+### 5. DeepSeek API 对话 (`src/services/deepseek.ts`)
+
+调用 DeepSeek API 实现 NPC 智能对话。
+
+**API 配置：**
+- URL: `https://api.deepseek.com/v1/chat/completions`
+- 模型：`deepseek-chat`
+- temperature: 0.7
+- max_tokens: 100
+
+### 6. 存档系统 (`src/store/saveSystem.ts`)
+
+使用 LocalStorage 保存游戏进度。
+
+**存档内容：**
+- 玩家状态
+- 世界状态
+- 设置（包括 API Key）
+- 存档时间戳
+
+**API Key 持久化：**
+- 单独存储在 `ai-dnd-deepseek-api-key`
+- 重启后仍然存在
+
+## 可配置选项
+
+### 玩家配置 (`src/store/playerStore.ts`)
+
+```typescript
+export const INVENTORY_SLOTS = 20;      // 背包格子数量
+export const BASE_SKILL_SLOTS = 3;      // 基础技能槽数量
+export const MAX_LEVEL = 10;            // 最大等级
+export const WEIGHT_LIMIT = 50;         // 背包重量上限
+```
+
+### 地图配置 (`src/store/worldStore.ts`)
+
+```typescript
+const defaultMapData = {
+  width: 1024,    // 地图宽度
+  height: 768,    // 地图高度 (4:3 比例)
+  // ... 其他配置
+};
+```
+
+### 移动速度 (`src/store/settingsStore.ts`)
+
+```typescript
+moveSpeed: 10;        // 玩家移动速度
+interactionRange: 50; // NPC 交互范围
+```
+
+### API 配置 (`src/services/deepseek.ts`)
+
+```typescript
+const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+// 可在 chatWithNPC 函数中调整：
+// - temperature: 0.7  (创造力，0-2)
+// - max_tokens: 100   (最大输出长度)
+```
+
+### 游戏规则 (`src/data/rules.json`)
+
+以 JSON 格式存储游戏规则文档，支持多个 Tab：
+- 技能
+- 属性
+- 装备
+- 战斗
+
+## 项目结构
+
+```
+src/
+├── components/
+│   ├── Dialogue/       # 对话组件
+│   ├── Equipment/      # 装备栏
+│   ├── Inventory/      # 背包
+│   ├── Layout/         # 主布局
+│   ├── Map/           # 地图及标记
+│   ├── Rules/         # 规则面板
+│   ├── Settings/      # 设置
+│   ├── Spells/        # 技能栏
+│   ├── Stats/         # 玩家状态
+│   └── WorldPanel/    # 世界状态面板
+├── data/
+│   └── rules.json     # 游戏规则文档
+├── services/
+│   └── deepseek.ts    # DeepSeek API 服务
+├── store/
+│   ├── dialogueStore.ts  # 对话状态
+│   ├── playerStore.ts    # 玩家状态
+│   ├── saveSystem.ts     # 存档系统
+│   ├── settingsStore.ts  # 设置状态
+│   └── worldStore.ts     # 世界状态
+├── types/
+│   └── index.ts       # TypeScript 类型定义
+└── main.tsx           # 入口文件
+```
+
+## 游戏布局
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  ┌────────┐  ┌──────────────────────┐  ┌────────────────────────┐    │
+│  │        │  │                      │  │  冒险者状态 (522px)    │    │
+│  │ 世界   │  │                      │  ├────────────────────────┤   │
+│  │ 状态   │  │       地 图          │  │  装备 (230px, 3x3)     │    │
+│  │        │  │     (1024x768)       │  └────────────────────────┘    │
+│  │        │  │                      │                                 │
+│  └────────┘  └──────────────────────┘                                 │
+│  ┌────────────┐  ┌─────────────────────────┐  ┌───────────────────┐   │
+│  │ 背包 (4x5) │  │      对 话 栏           │  │  技能 (3x3)       │   │
+│  │ 420px      │  │      420px              │  │  420px            │   │
+│  └────────────┘  └─────────────────────────┘  └───────────────────┘   │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+## 操作说明
+
+| 按键 | 功能 |
+|------|------|
+| W/↑ | 向上移动 |
+| S/↓ | 向下移动 |
+| A/← | 向左移动 |
+| D/→ | 向右移动 |
+| 点击 NPC | 打开对话 |
+| Enter | 发送消息 |
+
+## 扩展指南
+
+### 添加新地图
+
+在 `worldStore.ts` 中添加新的 `MapData`：
+
+```typescript
+const newMapData: MapData = {
+  id: 'forest',
+  name: '森林',
+  background: '/assets/maps/forest.png',
+  width: 1024,
+  height: 768,
+  markers: [
+    // 添加 NPC、传送门、敌人等
+  ],
+  collisions: [
+    // 添加碰撞区域
+  ]
+};
+```
+
+### 添加新物品类型
+
+在 `types/index.ts` 中扩展 `Item` 类型：
+
+```typescript
+export interface Item {
+  id: string;
+  name: string;
+  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'consumable' | /* 新类型 */;
+  description: string;
+  stats?: Record<string, number>;
+}
+```
+
+### 自定义 NPC 对话
+
+在 `rules.json` 中添加对话规则，或修改 `deepseek.ts` 中的系统提示词：
+
+```typescript
+const systemPrompt = `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+```
+
+## 许可证
+
+MIT

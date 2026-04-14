@@ -9,7 +9,7 @@ interface NpcMarkerProps {
 
 const NpcMarker: React.FC<NpcMarkerProps> = ({ marker }) => {
   const { position } = usePlayerStore();
-  const { openDialogue } = useDialogueStore();
+  const { openLLMDialogue } = useDialogueStore();
 
   // 检查是否在交互范围内
   const distance = Math.sqrt(
@@ -19,8 +19,8 @@ const NpcMarker: React.FC<NpcMarkerProps> = ({ marker }) => {
 
   const handleClick = () => {
     if (inRange && marker.interactable) {
-      // 这里应该加载对话数据，暂时用简单的对话
-      openDialogue(marker.id, marker.name || 'NPC', [], 'start');
+      // 使用 LLM 对话模式
+      openLLMDialogue(marker.id, marker.name || 'NPC');
     }
   };
 

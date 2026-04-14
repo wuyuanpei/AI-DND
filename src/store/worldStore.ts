@@ -17,13 +17,13 @@ interface WorldState {
   updateMarker: (markerId: string, updates: Partial<Marker>) => void;
 }
 
-// 默认地图数据
+// 默认地图数据 - 4:3 比例
 const defaultMapData: MapData = {
   id: 'village',
   name: '村庄',
   background: '/assets/maps/village.png',
   width: 1024,
-  height: 1024,
+  height: 768,
   markers: [
     {
       id: 'npc_elder',
@@ -49,7 +49,7 @@ const defaultMapData: MapData = {
       id: 'enemy_goblin',
       type: 'enemy',
       x: 600,
-      y: 700,
+      y: 500,
       sprite: '/assets/sprites/goblin.png',
       name: '哥布林',
       hp: 50,
@@ -57,10 +57,10 @@ const defaultMapData: MapData = {
     }
   ],
   collisions: [
-    { type: 'rect', x: 0, y: 0, width: 50, height: 1024 }, // 左边界
-    { type: 'rect', x: 974, y: 0, width: 50, height: 1024 }, // 右边界
+    { type: 'rect', x: 0, y: 0, width: 50, height: 768 }, // 左边界
+    { type: 'rect', x: 974, y: 0, width: 50, height: 768 }, // 右边界
     { type: 'rect', x: 0, y: 0, width: 1024, height: 50 }, // 上边界
-    { type: 'rect', x: 0, y: 974, width: 1024, height: 50 } // 下边界
+    { type: 'rect', x: 0, y: 718, width: 1024, height: 50 } // 下边界
   ]
 };
 

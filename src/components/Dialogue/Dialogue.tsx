@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { chatWithNPC } from '../../services/deepseek';
@@ -19,11 +19,17 @@ const Dialogue: React.FC = () => {
   } = useDialogueStore();
   const { deepseekApiKey } = useSettingsStore();
   const [userInput, setUserInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 自动滚动到最新消息
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
 
-  // 处理LLM对话输入
+  // 处理 LLM 对话输入
   const handleLLMSubmit = async () => {
     if (!userInput.trim() || !deepseekApiKey) return;
 
@@ -33,7 +39,7 @@ const Dialogue: React.FC = () => {
 
     try {
       const response = await chatWithNPC(
-        `你是DND游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过50字）。`,
+        `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`,
         userInput,
         deepseekApiKey
       );
@@ -54,20 +60,20 @@ const Dialogue: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* NPC名称 */}
-      <div className="text-yellow-400 font-bold text-sm mb-2 border-b border-gray-600 pb-1">
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* NPC 名称 */}
+      <div className="text-yellow-400 font-bold text-sm mb-1 border-b border-gray-600 pb-1 flex-shrink-0">
         {npcName}
       </div>
 
-      {/* 对话内容 */}
-      <div className="flex-1 overflow-y-auto mb-2 text-white text-sm">
+      {/* 对话内容 - 固定高度可滚动区域 */}
+      <div className="flex-1 overflow-y-auto mb-2 text-white text-sm min-h-0 max-h-full">
         {/* 脚本模式：显示当前节点文本 */}
         {mode === 'scripted' && currentNode && (
           <div className="bg-gray-600 rounded p-2 mb-2">{currentNode.text}</div>
         )}
 
-        {/* LLM模式：显示对话历史 */}
+        {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
           <div className="space-y-2">
             {messages
@@ -87,6 +93,7 @@ const Dialogue: React.FC = () => {
             {isLoading && (
               <div className="text-gray-400 text-center">思考中...</div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
@@ -108,7 +115,7 @@ const Dialogue: React.FC = () => {
           </div>
         )}
 
-        {/* LLM模式：输入框 */}
+        {/* LLM 模式：输入框 */}
         {mode === 'llm' && (
           <div className="flex gap-2">
             <input
@@ -133,7 +140,7 @@ const Dialogue: React.FC = () => {
 
       {/* 关闭按钮 */}
       <button
-        className="mt-2 text-gray-400 hover:text-white text-xs"
+        className="mt-2 text-gray-400 hover:text-white text-xs flex-shrink-0"
         onClick={closeDialogue}
       >
         [关闭对话]

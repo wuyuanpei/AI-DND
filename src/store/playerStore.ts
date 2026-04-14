@@ -1,6 +1,24 @@
 import { create } from 'zustand';
 import type { Position, Equipment, Item, Skill } from '../types';
 
+// 背包格子数量
+export const INVENTORY_SLOTS = 20;
+// 技能格子数量 - 基础 3 个，每级 +1
+export const BASE_SKILL_SLOTS = 3;
+// 最大等级
+export const MAX_LEVEL = 10;
+// 背包重量上限
+export const WEIGHT_LIMIT = 50;
+
+/**
+ * 计算技能上限：基础 3 个 + 每级 +1，满级 10 级时 12 个
+ * 公式：3 + (等级 - 1) = 2 + 等级
+ */
+export const getSkillCap = (level: number): number => {
+  const cap = BASE_SKILL_SLOTS + (level - 1);
+  return Math.min(cap, BASE_SKILL_SLOTS + (MAX_LEVEL - 1)); // 最多 12 个
+};
+
 interface PlayerState {
   name: string;
   level: number;
@@ -12,8 +30,13 @@ interface PlayerState {
   exp: number;
   gold: number;
   equipment: Equipment;
-  inventory: Item[];
+  inventory: Record<number, Item>; // 使用数字索引作为 key
   skills: Skill[];
+  // 四维属性
+  strength: number; // 力量
+  agility: number; // 敏捷
+  intelligence: number; // 智力
+  charisma: number; // 魅力
 
   // Actions
   setName: (name: string) => void;
@@ -22,12 +45,13 @@ interface PlayerState {
   takeDamage: (amount: number) => void;
   heal: (amount: number) => void;
   addGold: (amount: number) => void;
-  addItem: (item: Item) => void;
-  removeItem: (itemId: string) => void;
-  equipItem: (item: Item) => void;
+  addItem: (item: Item, slot?: number) => void;
+  removeItem: (slot: number) => void;
+  equipItem: (item: Item, slot: number) => void;
+  getCurrentWeight: () => number;
 }
 
-const initialPosition: Position = { x: 512, y: 512 };
+const initialPosition: Position = { x: 512, y: 384 };
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   name: '冒险者',
@@ -40,8 +64,12 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   exp: 0,
   gold: 0,
   equipment: {},
-  inventory: [],
+  inventory: {},
   skills: [],
+  strength: 10,
+  agility: 10,
+  intelligence: 10,
+  charisma: 10,
 
   setName: (name) => set({ name }),
   setPosition: (pos) => set({ position: pos }),
@@ -60,17 +88,41 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   addGold: (amount) => set((state) => ({
     gold: state.gold + amount
   })),
-  addItem: (item) => set((state) => ({
-    inventory: [...state.inventory, item]
-  })),
-  removeItem: (itemId) => set((state) => ({
-    inventory: state.inventory.filter(i => i.id !== itemId)
-  })),
-  equipItem: (item) => set((state) => ({
-    equipment: {
-      ...state.equipment,
-      [item.type]: item
-    },
-    inventory: state.inventory.filter(i => i.id !== item.id)
-  })),
+  addItem: (item, slot) => {
+    if (slot !== undefined) {
+      set((state) => ({
+        inventory: { ...state.inventory, [slot]: item }
+      }));
+    } else {
+      // 寻找第一个空槽
+      set((state) => {
+        for (let i = 0; i < INVENTORY_SLOTS; i++) {
+          if (!state.inventory[i]) {
+            return { inventory: { ...state.inventory, [i]: item } };
+          }
+        }
+        return state;
+      });
+    }
+  },
+  removeItem: (slot) => set((state) => {
+    const newInventory = { ...state.inventory };
+    delete newInventory[slot];
+    return { inventory: newInventory };
+  }),
+  equipItem: (item, slot) => set((state) => {
+    const newInventory = { ...state.inventory };
+    delete newInventory[slot];
+    return {
+      equipment: {
+        ...state.equipment,
+        [item.type]: item
+      },
+      inventory: newInventory
+    };
+  }),
+  getCurrentWeight: () => {
+    const state = usePlayerStore.getState();
+    return Object.keys(state.inventory).length;
+  },
 }));

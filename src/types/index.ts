@@ -54,16 +54,23 @@ export interface Position {
 }
 
 export interface Equipment {
-  weapon?: Item;
-  armor?: Item;
   helmet?: Item;
+  chest?: Item;
+  shield?: Item;
+  mainWeapon?: Item;
+  offWeapon?: Item;
+  ranged?: Item;
+  top?: Item;
+  pants?: Item;
   boots?: Item;
 }
 
 export interface Item {
   id: string;
   name: string;
-  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'consumable';
+  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'consumable' |
+        'chest' | 'shield' | 'mainWeapon' | 'offWeapon' | 'ranged' |
+        'top' | 'pants';
   description: string;
   stats?: Record<string, number>;
 }
