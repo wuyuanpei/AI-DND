@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+:root {
+  --map-width: 1024px;
+  --map-height: 1024px;
+}
