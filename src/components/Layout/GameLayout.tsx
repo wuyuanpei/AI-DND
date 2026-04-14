@@ -9,6 +9,7 @@ import Settings from '../Settings/Settings';
 import Rules from '../Rules/Rules';
 import Inventory from '../Inventory/Inventory';
 import { saveGame, loadGame } from '../../store/saveSystem';
+import { useSettingsStore } from '../../store/settingsStore';
 
 /**
  * 游戏主布局 - 4:3 比例
@@ -30,6 +31,8 @@ import { saveGame, loadGame } from '../../store/saveSystem';
  */
 
 const GameLayout: React.FC = () => {
+  const { apiCallCount, totalPromptTokens, totalCompletionTokens, totalTokens } = useSettingsStore();
+
   // 启动时加载存档
   useEffect(() => {
     loadGame();
@@ -42,7 +45,7 @@ const GameLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="h-screen w-screen bg-gray-900 flex items-center justify-center p-4">
+    <div className="h-screen w-screen bg-gray-900 flex flex-col items-center justify-center p-4">
       {/* 设置按钮 - 右上角 */}
       <Settings />
       {/* 规则按钮 - 设置按钮左边 */}
@@ -89,6 +92,14 @@ const GameLayout: React.FC = () => {
           <div className="w-[200px] bg-gray-700 rounded-lg p-3 h-full">
             <Spells />
           </div>
+        </div>
+
+        {/* API 统计信息 - 底部 */}
+        <div className="flex justify-center gap-6 text-xs text-gray-400">
+          <span>API 调用：{apiCallCount} 次</span>
+          <span>Prompt Token: {totalPromptTokens}</span>
+          <span>Completion Token: {totalCompletionTokens}</span>
+          <span>Total Token: {totalTokens}</span>
         </div>
       </div>
     </div>

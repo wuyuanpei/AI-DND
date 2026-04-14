@@ -5,6 +5,17 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface ChatResponse {
+  content: string;
+  usage: TokenUsage;
+}
+
 /**
  * 与NPC对话（通过DeepSeek API）
  */
@@ -12,7 +23,7 @@ export async function chatWithNPC(
   systemPrompt: string,
   userMessage: string,
   apiKey: string
-): Promise<string> {
+): Promise<ChatResponse> {
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage }
@@ -38,7 +49,14 @@ export async function chatWithNPC(
   }
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  return {
+    content: data.choices[0].message.content,
+    usage: {
+      promptTokens: data.usage?.prompt_tokens || 0,
+      completionTokens: data.usage?.completion_tokens || 0,
+      totalTokens: data.usage?.total_tokens || 0
+    }
+  };
 }
 
 /**

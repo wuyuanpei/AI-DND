@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Position, Equipment, Item, Skill } from '../types';
 
 // 背包格子数量
-export const INVENTORY_SLOTS = 20;
+export const INVENTORY_SLOTS = 28;
 // 技能格子数量 - 基础 3 个，每级 +1
 export const BASE_SKILL_SLOTS = 3;
 // 最大等级
