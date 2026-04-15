@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useScriptStore } from '../../store/scriptStore';
+import { logError } from '../../store/logStore';
 import { DM_BASE_PROMPT } from '../../config/dmConfig';
 import { chatWithNPC } from '../../services/qwen';
 import type { ChatMessage } from '../../services/qwen';
@@ -12,14 +13,12 @@ const Dialogue: React.FC = () => {
   const {
     isOpen,
     mode,
-    npcName,
     currentNodeId,
     nodes,
     messages,
     isLoading,
     selectChoice,
     addMessage,
-    closeDialogue,
     setLoading,
     switchTab,
     hideTab,
@@ -39,6 +38,8 @@ const Dialogue: React.FC = () => {
   // 检查当前 NPC 是否在范围内（DM 始终在范围内）
   const isInRange = isDM ? true : (activeTab?.inRange ?? false);
 
+  const { activeScript } = useScriptStore();
+
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!isOpen) {
@@ -50,6 +51,26 @@ const Dialogue: React.FC = () => {
       openLLMDialogue(DM_NPC_ID, 'DM', systemPrompt);
     }
   }, []);
+
+  // 当当前章节变化时，更新 DM 的系统提示词
+  useEffect(() => {
+    if (!isOpen) return;
+    const scriptStore = useScriptStore.getState();
+    const dmPrompt = scriptStore.getDmSystemPrompt();
+    const systemPrompt = dmPrompt
+      ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
+      : `${DM_BASE_PROMPT}\n\n`;
+
+    const state = useDialogueStore.getState();
+    const dmMessages = state.npcMessages[DM_NPC_ID] || [];
+    if (dmMessages.length > 0 && dmMessages[0].role === 'system') {
+      const newDmMessages = [{ role: 'system' as const, content: systemPrompt }, ...dmMessages.slice(1)];
+      useDialogueStore.setState({
+        npcMessages: { ...state.npcMessages, [DM_NPC_ID]: newDmMessages },
+        ...(state.activeTabId === DM_NPC_ID ? { messages: newDmMessages } : {})
+      });
+    }
+  }, [activeScript?.currentActId, isOpen]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -69,7 +90,6 @@ const Dialogue: React.FC = () => {
     // 保存当前的 npcId 和 npcName，防止切换 tab 时变化
     const currentNpcId = store.npcId;
     const currentNpcName = store.npcName;
-    const currentActiveTabId = store.activeTabId;
 
     // 获取历史对话（排除 system 消息）
     const historyMessages: DialogueMessage[] = store.messages.filter(m => m.role !== 'system');
@@ -114,8 +134,27 @@ const Dialogue: React.FC = () => {
       );
       // 更新 API 统计
       addApiUsage(response.usage);
+      let replyContent = response.content;
+      // 如果是 DM，尝试解析 JSON 响应，提取 dialogue 字段，并解析章节指令
+      if (currentNpcId === DM_NPC_ID) {
+        let jsonStr = replyContent.trim();
+        if (jsonStr.startsWith('```')) {
+          jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+        }
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed && typeof parsed.dialogue === 'string') {
+            replyContent = parsed.dialogue.trim();
+          } else {
+            logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
+          }
+        } catch (e) {
+          logError('DM JSON 响应解析失败', `错误: ${e instanceof Error ? e.message : String(e)}; 原始内容: ${response.content.slice(0, 500)}`);
+        }
+        scriptStore.updateCurrentActByLLM(response.content);
+      }
       // 使用保存的 npcId 添加回复，确保添加到正确的 tab
-      addMessageToNpc(currentNpcId, { role: 'assistant', content: response.content });
+      addMessageToNpc(currentNpcId, { role: 'assistant', content: replyContent });
     } catch (error) {
       addMessageToNpc(currentNpcId, { role: 'assistant', content: '（对话出错...）' });
     } finally {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../store/settingsStore';
-import type { Provider } from '../../store/settingsStore';
 
 const QWEN_MODELS = [
   'qwen3.5-flash',

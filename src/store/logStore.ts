@@ -73,6 +73,8 @@ export const logApiCall = (
     response?: string;
     usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
     error?: string;
+    historyCount?: number;
+    messages?: unknown;
   }
 ) => {
   useLogStore.getState().addLog({

@@ -128,6 +128,7 @@ export interface ScriptNPCStats {
 export interface ScriptNPC {
   id: string;
   name: string;
+  summary: string;
   personality: string;
   background: string;
   dialogueStyle: string;
@@ -135,10 +136,19 @@ export interface ScriptNPC {
   stats: ScriptNPCStats;
 }
 
+export interface ScriptEnding {
+  id: string;
+  title: string;
+  condition: string;
+  synopsis: string;
+  content: string;
+}
+
 export interface ScriptAct {
   id: string;
   title: string;
   synopsis: string;
+  content: string;
 }
 
 export interface ParsedScript {
@@ -146,7 +156,9 @@ export interface ParsedScript {
   description: string;
   author: string;
   acts: ScriptAct[];
+  endings: ScriptEnding[];
   dmPrompt: string;
   npcs: ScriptNPC[];
   body: string;
+  currentActId: string | null;
 }

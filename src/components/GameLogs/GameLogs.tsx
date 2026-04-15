@@ -30,10 +30,26 @@ const GameLogs: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [filterCategory, setFilterCategory] = useState<GameLogCategory | 'all'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredLogs = filterCategory === 'all'
     ? logs
     : logs.filter((log) => log.category === filterCategory);
+
+  const handleCopyLog = async (e: React.MouseEvent, log: typeof logs[0]) => {
+    e.stopPropagation();
+    const text = [
+      `[${log.timestamp}] [${log.level.toUpperCase()}] [${log.category}] ${log.message}`,
+      log.details ? `---\n${log.details.replace(/\\n/g, '\n')}` : '',
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(log.id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // ignore
+    }
+  };
 
   return (
     <>
@@ -108,14 +124,24 @@ const GameLogs: React.FC = () => {
                       <span className={`px-1.5 py-0.5 rounded text-[10px] ${CATEGORY_COLORS[log.category]}`}>
                         {log.category}
                       </span>
-                      <span className="text-gray-300 flex-1 truncate">{log.message}</span>
+                      <span className="text-gray-300 flex-1 whitespace-pre-line">{log.message.replace(/\\n/g, '\n')}</span>
+                      <button
+                        className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                          copiedId === log.id
+                            ? 'bg-green-700 border-green-600 text-green-100'
+                            : 'bg-gray-700 border-gray-600 text-gray-400 hover:text-white hover:bg-gray-600'
+                        }`}
+                        onClick={(e) => handleCopyLog(e, log)}
+                      >
+                        {copiedId === log.id ? '已复制' : '复制'}
+                      </button>
                       {log.details && (
                         <span className="text-gray-500">{expandedId === log.id ? '▼' : '▶'}</span>
                       )}
                     </div>
                     {log.details && expandedId === log.id && (
-                      <pre className="bg-gray-900 m-0 px-3 py-2 text-gray-400 font-mono whitespace-pre-wrap break-all text-[11px]">
-                        {log.details}
+                      <pre className="bg-gray-900 m-0 px-3 py-2 text-gray-400 font-mono whitespace-pre-wrap break-all text-[11px] overflow-y-auto max-h-[40vh]">
+                        {log.details.replace(/\\n/g, '\n')}
                       </pre>
                     )}
                   </div>

@@ -36,6 +36,7 @@ import { useScriptStore } from '../../store/scriptStore';
 const GameLayout: React.FC = () => {
   const { apiCallCount, totalPromptTokens, totalCompletionTokens, totalTokens } = useSettingsStore();
   const { activeScript } = useScriptStore();
+  const currentAct = activeScript?.acts.find(a => a.id === activeScript.currentActId);
 
   // 启动时加载存档
   useEffect(() => {
@@ -60,15 +61,26 @@ const GameLayout: React.FC = () => {
       <ScriptManager />
 
       {/* 剧本信息 - 页面最上方 */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-700 rounded-lg px-6 py-3 text-sm text-gray-300 max-w-[1024px] w-full">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-800 rounded-lg px-5 py-2 text-sm text-gray-300 max-w-[1024px] w-full border border-gray-600 shadow-lg">
         {activeScript ? (
-          <div className="flex items-center gap-6">
-            <span className="text-yellow-400 font-bold text-base whitespace-nowrap">{activeScript.title}</span>
-            {activeScript.author && <span className="text-gray-400 whitespace-nowrap">作者：{activeScript.author}</span>}
-            {activeScript.description && <span className="text-gray-500 line-clamp-1">{activeScript.description}</span>}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-yellow-400 font-bold text-base whitespace-nowrap">{activeScript.title}</span>
+              {currentAct ? (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-yellow-300 text-sm font-medium whitespace-nowrap">▸ {currentAct.title}</span>
+                  <span className="text-gray-500 text-xs truncate">{currentAct.synopsis}</span>
+                </div>
+              ) : (
+                activeScript.description && <span className="text-gray-500 text-xs truncate">{activeScript.description}</span>
+              )}
+            </div>
+            {activeScript.author && (
+              <span className="text-gray-500 text-xs whitespace-nowrap flex-shrink-0">作者：{activeScript.author}</span>
+            )}
           </div>
         ) : (
-          <span className="text-gray-500">未导入剧本</span>
+          <div className="text-center text-gray-500">未导入剧本</div>
         )}
       </div>
 

@@ -351,11 +351,21 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 
 ===== 剧本设定 =====
 {剧本中的 dmPrompt}
+
+===== 剧本结构 =====
+1. 第一幕标题
+   概要：第一幕概要
+2. 第二幕标题
+   概要：第二幕概要
+...
+
+===== 当前章节：第一幕标题 =====
+{当前幕的详细剧情 content}
 ```
 
 ## 剧本格式
 
-剧本是一个 `.md` 文件，通过右上角「📖 剧本」按钮导入。文件格式由 **YAML frontmatter** + **Markdown 正文** 两部分组成。
+剧本是一个 `.md` 文件，通过右上角「📖 剧本」按钮导入。文件采用 **YAML frontmatter** 格式，所有剧本内容都包含在顶部 `---` 分隔符之间的 YAML 结构中。
 
 ### YAML frontmatter（必须）
 
@@ -368,6 +378,7 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 | `author` | string | ❌ | 作者名 |
 | `dmPrompt` | string (多行) | ✅ | 给 DM 的提示词，作为 DM 对话的上下文 |
 | `acts` | array | ❌ | 幕列表（见下方结构） |
+| `endings` | array | ❌ | 结局列表（见下方结构） |
 | `npcs` | array | ❌ | NPC 列表（见下方结构） |
 
 ### `acts` 结构
@@ -379,6 +390,19 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 | `id` | string | ❌ | 幕的唯一标识（如 `act1`） |
 | `title` | string | ❌ | 幕标题 |
 | `synopsis` | string | ❌ | 幕概要 |
+| `content` | string (多行) | ❌ | 幕的详细剧情（约 500 字），会在当前章节下发送给 DM |
+
+### `endings` 结构
+
+每个结局是一个对象：
+
+| 字段 | 类型 | 必须 | 说明 |
+|------|------|------|------|
+| `id` | string | ❌ | 结局的唯一标识（如 `ending_seal`） |
+| `title` | string | ❌ | 结局标题 |
+| `condition` | string | ❌ | 触发条件 |
+| `synopsis` | string | ❌ | 结局概要 |
+| `content` | string (多行) | ❌ | 结局的详细剧情描述 |
 
 ### `npcs` 结构
 
@@ -388,6 +412,7 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 |------|------|------|------|
 | `id` | string | ❌ | NPC 的唯一标识，需与地图 Marker 的 `id` 匹配才能生效 |
 | `name` | string | ❌ | NPC 显示名称 |
+| `summary` | string | ❌ | NPC 的一句话简介 |
 | `personality` | string | ❌ | 性格描述 |
 | `background` | string | ❌ | 背景故事 |
 | `dialogueStyle` | string | ❌ | 对话风格描述 |
@@ -403,13 +428,18 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 | `intelligence` | number | 10 | 智力 |
 | `charisma` | number | 10 | 魅力 |
 
-### Markdown 正文（可选）
+### 当前章节
 
-`---` 分隔符之后是剧本的 Markdown 正文，包含剧情描述、场景、对话等内容。这部分不会发送给 LLM，仅用于创作者参考和剧本管理面板中预览。
+导入剧本后，游戏会自动将第一幕设为「当前章节」。你可以在剧本管理面板的「幕」标签页中切换当前章节。
+
+**DM 提示词拼接规则：**
+当玩家与 DM 对话时，系统会自动将以下内容拼接到 DM 的系统提示词中：
+1. 所有幕的 `title` 和 `synopsis`（作为整体剧本结构）
+2. 当前章节的 `content`（作为当前需要推进的详细剧情）
 
 ### 示例文件
 
-参考项目中的 `src/data/example-script.md`，包含完整的三幕剧情和 10 个 NPC。
+参考项目中的 `src/data/example-script.yaml`，包含完整的三幕剧情和 10 个 NPC。
 
 ### 示例格式
 
@@ -422,12 +452,28 @@ acts:
   - id: act1
     title: "第一幕标题"
     synopsis: "第一幕概要"
+    content: |
+      第一幕的详细剧情内容，约500字左右。
+      可以包含场景描述、对话、关键事件等。
+  - id: act2
+    title: "第二幕标题"
+    synopsis: "第二幕概要"
+    content: |
+      第二幕的详细剧情内容...
 dmPrompt: |
   给DM的提示词，作为DM对话的上下文
   可以多行书写
+endings:
+  - id: ending1
+    title: "结局一"
+    condition: "触发条件描述"
+    synopsis: "结局概要"
+    content: |
+      结局的详细剧情描述...
 npcs:
   - id: npc_elder
     name: "村长"
+    summary: "NPC的一句话简介"
     personality: "性格描述"
     background: "背景故事"
     dialogueStyle: "对话风格"
@@ -440,9 +486,6 @@ npcs:
       intelligence: 12
       charisma: 10
 ---
-
-# 第一幕
-剧情正文...
 ```
 
 ## 最近修改

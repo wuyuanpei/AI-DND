@@ -53,7 +53,7 @@ interface PlayerState {
 
 const initialPosition: Position = { x: 512, y: 384 };
 
-export const usePlayerStore = create<PlayerState>((set) => ({
+export const usePlayerStore = create<PlayerState>((set, get) => ({
   name: '冒险者',
   level: 1,
   position: initialPosition,
@@ -122,7 +122,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     };
   }),
   getCurrentWeight: () => {
-    const state = usePlayerStore.getState();
+    const state = get();
     return Object.keys(state.inventory).length;
   },
 }));
