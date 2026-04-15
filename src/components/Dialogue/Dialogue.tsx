@@ -201,29 +201,33 @@ const Dialogue: React.FC = () => {
       </div>
 
       {/* 对话内容 - 固定高度可滚动区域 */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden mb-2 text-white text-sm min-h-0 max-h-full min-w-0" style={{ minWidth: 0 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden mb-2 text-white text-sm min-h-0 max-h-full min-w-0" style={{ minWidth: 0, width: '992px' }}>
         {/* 脚本模式：显示当前节点文本 */}
         {mode === 'scripted' && currentNode && (
           <div
-            className="bg-gray-600 rounded p-2 mb-2 max-w-full"
-            style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
+            className="bg-gray-600 rounded p-2 mb-2"
+            style={{ width: '992px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
           >{currentNode.text}</div>
         )}
 
         {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
-          <div className="space-y-2 w-full" style={{ minWidth: 0 }}>
+          <div className="space-y-2" style={{ width: '992px', minWidth: 0 }}>
             {messages
               .filter((m) => m.role !== 'system')
               .map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`p-2 rounded max-w-[calc(100%-1rem)] ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 ml-4'
-                      : 'bg-gray-600 mr-4'
-                  }`}
-                  style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
+                  className="p-2 rounded"
+                  style={{
+                    width: '892px',
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'break-word',
+                    borderRadius: '8px',
+                    background: msg.role === 'user' ? '#2563eb' : '#4b5563',
+                    marginLeft: msg.role === 'user' ? '100px' : '0',
+                    marginRight: msg.role === 'user' ? '0' : '100px',
+                  }}
                 >
                   {msg.content}
                 </div>
