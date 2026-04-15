@@ -161,4 +161,5 @@ export interface ParsedScript {
   npcs: ScriptNPC[];
   body: string;
   currentActId: string | null;
+  currentEndingId: string | null;
 }

@@ -2,11 +2,14 @@ import { create } from 'zustand';
 import yaml from 'js-yaml';
 import type { ParsedScript } from '../types';
 import { logSystem, logError } from './logStore';
+import { parseLLMJson } from '../utils/parseLLMJson';
 import {
+  DM_NPC_LIST_HEADER,
   DM_SCRIPT_STRUCTURE_HEADER,
   DM_CURRENT_ACT_HEADER_PREFIX,
   DM_CURRENT_ACT_HEADER_SUFFIX,
   DM_CURRENT_ACT_GUIDE,
+  DM_ENDINGS_HEADER,
   DM_JSON_FORMAT_HEADER,
   DM_JSON_FORMAT_PROMPT,
 } from '../config/dmConfig';
@@ -20,7 +23,7 @@ interface ScriptState {
 
   parseAndActivate: (markdownContent: string, scriptId: string) => void;
   deactivateScript: () => void;
-  updateCurrentActByLLM: (content: string) => void;
+  updateScriptProgressByLLM: (content: string) => void;
   getNpcSystemPrompt: (npcId: string) => string | null;
   getDmSystemPrompt: () => string | null;
   hasScriptNpc: (npcId: string) => boolean;
@@ -60,33 +63,39 @@ export const useScriptStore = create<ScriptState>((set, get) => ({
     set({ activeScript: null, activeScriptId: null });
   },
 
-  updateCurrentActByLLM: (content) => {
+  updateScriptProgressByLLM: (content) => {
     const { activeScript } = get();
-    if (!activeScript || activeScript.acts.length === 0) return;
+    if (!activeScript) return;
 
-    let jsonStr = content.trim();
-    if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const result = parseLLMJson(content);
+    if (result.error) {
+      logError('LLM 剧本推进指令解析失败', `${result.error}; 原始内容: ${content.slice(0, 500)}`);
     }
 
-    try {
-      const parsed = JSON.parse(jsonStr);
-      if (typeof parsed.instruction === 'string') {
-        const match = parsed.instruction.match(/switch_to_act:(\S+)/);
-        if (match) {
-          const actId = match[1].trim();
-          const act = activeScript.acts.find(a => a.id === actId);
-          if (act && activeScript.currentActId !== actId) {
-            const updated = { ...activeScript, currentActId: actId };
-            set({ activeScript: updated });
-            logSystem(`当前章节推进: ${act.title}`);
-          }
-        }
-      } else {
-        logError('LLM 章节指令缺少 instruction 字段', `原始内容: ${content.slice(0, 500)}`);
+    let updated = activeScript;
+
+    const switchToAct = (result.parsed?.switch_to_act ?? result.switch_to_act) as string | undefined;
+    if (typeof switchToAct === 'string') {
+      const actId = switchToAct.trim();
+      const act = activeScript.acts.find(a => a.id === actId);
+      if (act && activeScript.currentActId !== actId) {
+        updated = { ...updated, currentActId: actId };
+        logSystem(`当前章节推进: ${act.title}`);
       }
-    } catch (e) {
-      logError('LLM 章节指令解析失败', `错误: ${e instanceof Error ? e.message : String(e)}; 原始内容: ${content.slice(0, 500)}`);
+    }
+
+    const switchToEnding = (result.parsed?.switch_to_ending ?? result.switch_to_ending) as string | undefined;
+    if (typeof switchToEnding === 'string') {
+      const endingId = switchToEnding.trim();
+      const ending = activeScript.endings.find(e => e.id === endingId);
+      if (ending && activeScript.currentEndingId !== endingId) {
+        updated = { ...updated, currentEndingId: endingId };
+        logSystem(`当前结局切换: ${ending.title}`);
+      }
+    }
+
+    if (updated !== activeScript) {
+      set({ activeScript: updated });
     }
   },
 
@@ -106,24 +115,37 @@ export const useScriptStore = create<ScriptState>((set, get) => ({
 
     let prompt = activeScript.dmPrompt;
 
+    if (activeScript.npcs.length > 0) {
+      prompt += `\n\n${DM_NPC_LIST_HEADER}\n`;
+      activeScript.npcs.forEach((npc) => {
+        prompt += `- ${npc.name}（id: ${npc.id}）${npc.summary ? `：${npc.summary}` : ''}\n`;
+      });
+    }
+
     if (activeScript.acts.length > 0) {
-      prompt += `\n\n${DM_SCRIPT_STRUCTURE_HEADER}\n`;
+      prompt += `\n${DM_SCRIPT_STRUCTURE_HEADER}\n`;
       activeScript.acts.forEach((act, index) => {
-        prompt += `${index + 1}. ${act.title}\n   概要：${act.synopsis}\n`;
+        prompt += `${index + 1}. id=${act.id} | ${act.title}\n   概要：${act.synopsis}\n`;
       });
 
       const currentAct = activeScript.acts.find(a => a.id === activeScript.currentActId);
       if (currentAct?.content) {
         prompt += `\n${DM_CURRENT_ACT_HEADER_PREFIX}${currentAct.title}${DM_CURRENT_ACT_HEADER_SUFFIX}\n${DM_CURRENT_ACT_GUIDE(currentAct.title)}\n${currentAct.content}\n`;
-        logSystem('getDmSystemPrompt: 已追加当前章节', `actId=${currentAct.id}, title=${currentAct.title}, contentLength=${currentAct.content.length}`);
       } else {
         logError('getDmSystemPrompt: 未找到当前章节内容', `currentActId=${activeScript.currentActId}, acts=${JSON.stringify(activeScript.acts.map(a => ({id: a.id, hasContent: !!a.content})))}`);
       }
-
-      prompt += `\n${DM_JSON_FORMAT_HEADER}\n${DM_JSON_FORMAT_PROMPT}\n`;
     } else {
       logSystem('getDmSystemPrompt: 剧本无幕数据');
     }
+
+    if (activeScript.endings.length > 0) {
+      prompt += `\n${DM_ENDINGS_HEADER}\n`;
+      activeScript.endings.forEach((ending) => {
+        prompt += `- id=${ending.id} | ${ending.title}\n  触发条件：${ending.condition || '无'}\n  简介：${ending.synopsis || '无'}\n`;
+      });
+    }
+
+    prompt += `\n${DM_JSON_FORMAT_HEADER}\n${DM_JSON_FORMAT_PROMPT}\n`;
 
     return prompt;
   },
@@ -208,5 +230,6 @@ function parseScriptMarkdown(markdown: string): ParsedScript {
     npcs,
     body,
     currentActId,
+    currentEndingId: null,
   };
 }

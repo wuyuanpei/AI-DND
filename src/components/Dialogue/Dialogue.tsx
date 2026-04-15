@@ -7,6 +7,7 @@ import { DM_BASE_PROMPT } from '../../config/dmConfig';
 import { chatWithNPC } from '../../services/qwen';
 import type { ChatMessage } from '../../services/qwen';
 import type { DialogueMessage } from '../../types';
+import { parseLLMJson } from '../../utils/parseLLMJson';
 
 const Dialogue: React.FC = () => {
   const store = useDialogueStore();
@@ -137,21 +138,15 @@ const Dialogue: React.FC = () => {
       let replyContent = response.content;
       // 如果是 DM，尝试解析 JSON 响应，提取 dialogue 字段，并解析章节指令
       if (currentNpcId === DM_NPC_ID) {
-        let jsonStr = replyContent.trim();
-        if (jsonStr.startsWith('```')) {
-          jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+        const result = parseLLMJson(response.content);
+        if (result.dialogue) {
+          replyContent = result.dialogue.trim();
+        } else if (result.error) {
+          logError('DM JSON 响应解析失败', `${result.error}; 原始内容: ${response.content.slice(0, 500)}`);
+        } else {
+          logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
         }
-        try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed && typeof parsed.dialogue === 'string') {
-            replyContent = parsed.dialogue.trim();
-          } else {
-            logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
-          }
-        } catch (e) {
-          logError('DM JSON 响应解析失败', `错误: ${e instanceof Error ? e.message : String(e)}; 原始内容: ${response.content.slice(0, 500)}`);
-        }
-        scriptStore.updateCurrentActByLLM(response.content);
+        scriptStore.updateScriptProgressByLLM(response.content);
       }
       // 使用保存的 npcId 添加回复，确保添加到正确的 tab
       addMessageToNpc(currentNpcId, { role: 'assistant', content: replyContent });
