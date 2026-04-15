@@ -12,6 +12,7 @@ import GameLogs from '../GameLogs/GameLogs';
 import ScriptManager from '../ScriptManager/ScriptManager';
 import { saveGame, loadGame } from '../../store/saveSystem';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useScriptStore } from '../../store/scriptStore';
 
 /**
  * 游戏主布局 - 4:3 比例
@@ -34,6 +35,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 
 const GameLayout: React.FC = () => {
   const { apiCallCount, totalPromptTokens, totalCompletionTokens, totalTokens } = useSettingsStore();
+  const { activeScript } = useScriptStore();
 
   // 启动时加载存档
   useEffect(() => {
@@ -56,6 +58,19 @@ const GameLayout: React.FC = () => {
       <GameLogs />
       {/* 剧本按钮 - 日志按钮左边 */}
       <ScriptManager />
+
+      {/* 剧本信息 - 页面最上方 */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-700 rounded-lg px-6 py-3 text-sm text-gray-300 max-w-[1024px] w-full">
+        {activeScript ? (
+          <div className="flex items-center gap-6">
+            <span className="text-yellow-400 font-bold text-base whitespace-nowrap">{activeScript.title}</span>
+            {activeScript.author && <span className="text-gray-400 whitespace-nowrap">作者：{activeScript.author}</span>}
+            {activeScript.description && <span className="text-gray-500 line-clamp-1">{activeScript.description}</span>}
+          </div>
+        ) : (
+          <span className="text-gray-500">未导入剧本</span>
+        )}
+      </div>
 
       {/* 主容器 */}
       <div className="flex flex-col gap-4 bg-gray-800 rounded-lg p-4">

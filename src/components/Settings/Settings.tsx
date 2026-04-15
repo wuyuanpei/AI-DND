@@ -43,15 +43,15 @@ const Settings: React.FC = () => {
   return (
     <>
       <button
-        className="fixed top-4 right-4 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50"
+        className="fixed top-4 right-4 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-10"
         onClick={() => setIsOpen(true)}
       >
         ⚙ 设置
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl border border-gray-600">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsOpen(false)}>
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl border border-gray-600 z-[60]" onClick={(e) => e.stopPropagation()}>
             <div className="text-white font-bold text-lg mb-4">设置</div>
 
             <div className="mb-4">

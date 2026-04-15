@@ -18,7 +18,7 @@ const Rules: React.FC = () => {
     <>
       {/* 规则按钮 - 设置按钮左边 */}
       <button
-        className="fixed top-4 right-24 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50"
+        className="fixed top-4 right-24 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-10"
         onClick={() => setIsOpen(true)}
       >
         📜 规则
@@ -26,8 +26,8 @@ const Rules: React.FC = () => {
 
       {/* 规则面板 - 模态框 */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg max-w-2xl w-full mx-4 shadow-2xl border border-gray-600 flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsOpen(false)}>
+          <div className="bg-gray-800 rounded-lg max-w-2xl w-full mx-4 shadow-2xl border border-gray-600 flex flex-col max-h-[80vh] z-[60]" onClick={(e) => e.stopPropagation()}>
             {/* 标题栏 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-600">
               <div className="text-white font-bold text-lg">游戏规则</div>

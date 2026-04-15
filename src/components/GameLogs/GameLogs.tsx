@@ -39,7 +39,7 @@ const GameLogs: React.FC = () => {
     <>
       {/* 日志按钮 - 在 Rules 按钮旁边 */}
       <button
-        className="fixed top-4 right-44 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50"
+        className="fixed top-4 right-44 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-10"
         onClick={() => setIsOpen(true)}
       >
         📋 日志
@@ -47,8 +47,8 @@ const GameLogs: React.FC = () => {
 
       {/* 日志面板 - 模态框 */}
       {isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg w-[90vw] max-w-3xl max-h-[80vh] flex flex-col shadow-2xl border border-gray-600">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsOpen(false)}>
+          <div className="bg-gray-800 rounded-lg w-[90vw] max-w-3xl max-h-[80vh] flex flex-col shadow-2xl border border-gray-600 z-[60]" onClick={(e) => e.stopPropagation()}>
             {/* 头部 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-600">
               <div className="text-white font-bold text-lg">游戏系统日志</div>
