@@ -1,19 +1,53 @@
 import { create } from 'zustand';
-import type { TokenUsage } from '../services/deepseek';
+import type { TokenUsage } from '../services/qwen';
+import { logSystem } from './logStore';
 
-const API_KEY_STORAGE_KEY = 'ai-dnd-deepseek-api-key';
+const QWEN_API_KEY_STORAGE_KEY = 'ai-dnd-qwen-api-key';
+const DEEPSEEK_API_KEY_STORAGE_KEY = 'ai-dnd-deepseek-api-key';
+const PROVIDER_STORAGE_KEY = 'ai-dnd-provider';
+const QWEN_MODEL_STORAGE_KEY = 'ai-dnd-qwen-model';
+const DEEPSEEK_MODEL_STORAGE_KEY = 'ai-dnd-deepseek-model';
 
-// 从 localStorage 读取 API key
-const getStoredApiKey = (): string | null => {
+export type Provider = 'qwen' | 'deepseek';
+
+// 从 localStorage 读取配置
+const getStoredApiKey = (provider: Provider): string | null => {
   try {
-    return localStorage.getItem(API_KEY_STORAGE_KEY);
+    const key = provider === 'qwen' ? QWEN_API_KEY_STORAGE_KEY : DEEPSEEK_API_KEY_STORAGE_KEY;
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
 };
 
+const getStoredProvider = (): Provider => {
+  try {
+    return (localStorage.getItem(PROVIDER_STORAGE_KEY) as Provider) || 'qwen';
+  } catch {
+    return 'qwen';
+  }
+};
+
+const getStoredModel = (provider: Provider): string => {
+  try {
+    const key = provider === 'qwen' ? QWEN_MODEL_STORAGE_KEY : DEEPSEEK_MODEL_STORAGE_KEY;
+    return localStorage.getItem(key) || (provider === 'qwen' ? 'qwen3.5-flash' : 'deepseek-chat');
+  } catch {
+    return provider === 'qwen' ? 'qwen3.5-flash' : 'deepseek-chat';
+  }
+};
+
+const PROVIDER_API_URLS: Record<Provider, string> = {
+  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
+};
+
 interface SettingsState {
+  provider: Provider;
+  qwenApiKey: string | null;
   deepseekApiKey: string | null;
+  qwenModel: string;
+  deepseekModel: string;
   moveSpeed: number;
   interactionRange: number;
   apiCallCount: number;
@@ -21,15 +55,25 @@ interface SettingsState {
   totalCompletionTokens: number;
   totalTokens: number;
 
-  setApiKey: (key: string | null) => void;
+  setProvider: (provider: Provider) => void;
+  setApiKey: (provider: Provider, key: string | null) => void;
+  setModel: (provider: Provider, model: string) => void;
   setMoveSpeed: (speed: number) => void;
   setInteractionRange: (range: number) => void;
   addApiUsage: (usage: TokenUsage) => void;
   resetStats: () => void;
+  // 获取当前 provider 的配置
+  getCurrentApiKey: () => string | null;
+  getCurrentModel: () => string;
+  getCurrentApiUrl: () => string;
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
-  deepseekApiKey: getStoredApiKey(),
+export const useSettingsStore = create<SettingsState>((set, get) => ({
+  provider: getStoredProvider(),
+  qwenApiKey: getStoredApiKey('qwen'),
+  deepseekApiKey: getStoredApiKey('deepseek'),
+  qwenModel: getStoredModel('qwen'),
+  deepseekModel: getStoredModel('deepseek'),
   moveSpeed: 10,
   interactionRange: 50,
   apiCallCount: 0,
@@ -37,13 +81,27 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   totalCompletionTokens: 0,
   totalTokens: 0,
 
-  setApiKey: (key) => {
+  setProvider: (provider) => {
+    localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
+    set({ provider });
+    logSystem(`服务商切换: ${provider}`);
+  },
+  setApiKey: (provider, key) => {
+    const storageKey = provider === 'qwen' ? QWEN_API_KEY_STORAGE_KEY : DEEPSEEK_API_KEY_STORAGE_KEY;
     if (key) {
-      localStorage.setItem(API_KEY_STORAGE_KEY, key);
+      localStorage.setItem(storageKey, key);
     } else {
-      localStorage.removeItem(API_KEY_STORAGE_KEY);
+      localStorage.removeItem(storageKey);
     }
-    set({ deepseekApiKey: key });
+    set(provider === 'qwen' ? { qwenApiKey: key } : { deepseekApiKey: key });
+  },
+  setModel: (provider, model) => {
+    const storageKey = provider === 'qwen' ? QWEN_MODEL_STORAGE_KEY : DEEPSEEK_MODEL_STORAGE_KEY;
+    localStorage.setItem(storageKey, model);
+    const state = get();
+    const oldModel = provider === 'qwen' ? state.qwenModel : state.deepseekModel;
+    set(provider === 'qwen' ? { qwenModel: model } : { deepseekModel: model });
+    logSystem(`模型切换 (${provider}): ${oldModel || '无'} → ${model}`);
   },
   setMoveSpeed: (speed) => set({ moveSpeed: speed }),
   setInteractionRange: (range) => set({ interactionRange: range }),
@@ -57,5 +115,17 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   resetStats: () => {
     set({ apiCallCount: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0 });
-  }
+  },
+  getCurrentApiKey: () => {
+    const state = get();
+    return state.provider === 'qwen' ? state.qwenApiKey : state.deepseekApiKey;
+  },
+  getCurrentModel: () => {
+    const state = get();
+    return state.provider === 'qwen' ? state.qwenModel : state.deepseekModel;
+  },
+  getCurrentApiUrl: () => {
+    const state = get();
+    return PROVIDER_API_URLS[state.provider];
+  },
 }));

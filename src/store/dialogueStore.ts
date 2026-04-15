@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DialogueMessage, DialogueNode } from '../types';
+import { DM_BASE_PROMPT } from '../config/dmConfig';
 
 // DM 对话标识符
 export const DM_NPC_ID = '__dm__';
@@ -56,7 +57,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
   messages: [],
   npcMessages: {
     [DM_NPC_ID]: [
-      { role: 'system', content: '你是 DND 游戏的地下城主 (DM)。请用中世纪奇幻风格与玩家互动，描述游戏世界、NPC 反应和事件结果。保持简短（不超过 50 字）。' }
+      { role: 'system', content: DM_BASE_PROMPT }
     ]
   },
   npcLoading: {
@@ -108,22 +109,32 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
   // 关闭标签（删除）
   hideTab: (npcId) => {
     if (npcId === DM_NPC_ID) return; // DM 标签不能被删除
-    set((state) => {
-      // 保存当前标签的消息和加载状态
-      const updatedNpcMessages = {
-        ...state.npcMessages,
-        [state.npcId]: state.messages
-      };
-      const updatedNpcLoading = {
-        ...state.npcLoading,
-        [state.npcId]: state.isLoading
-      };
-      return {
-        tabs: state.tabs.filter(tab => tab.npcId !== npcId),
-        activeTabId: state.activeTabId === npcId ? DM_NPC_ID : state.activeTabId,
-        npcMessages: updatedNpcMessages,
-        npcLoading: updatedNpcLoading
-      };
+    const state = get();
+    // 保存当前标签的消息和加载状态
+    const currentNpcId = state.npcId;
+    const updatedNpcMessages = {
+      ...state.npcMessages,
+      [currentNpcId]: state.messages
+    };
+    const updatedNpcLoading = {
+      ...state.npcLoading,
+      [currentNpcId]: state.isLoading
+    };
+
+    const newActiveId = state.activeTabId === npcId ? DM_NPC_ID : state.activeTabId;
+    const dmMessages = updatedNpcMessages[DM_NPC_ID] || [];
+    const dmLoading = updatedNpcLoading[DM_NPC_ID] || false;
+    const dmTab = state.tabs.find(t => t.npcId === DM_NPC_ID);
+
+    set({
+      tabs: state.tabs.filter(tab => tab.npcId !== npcId),
+      activeTabId: newActiveId,
+      npcId: newActiveId,
+      npcName: dmTab?.npcName || 'DM',
+      messages: newActiveId === DM_NPC_ID ? dmMessages : (updatedNpcMessages[newActiveId] || []),
+      isLoading: newActiveId === DM_NPC_ID ? dmLoading : (updatedNpcLoading[newActiveId] || false),
+      npcMessages: updatedNpcMessages,
+      npcLoading: updatedNpcLoading
     });
   },
 
@@ -214,8 +225,8 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
 
     // 创建新的对话，优先使用传入的系统提示词
     const defaultPrompt = npcId === DM_NPC_ID
-      ? '你是 DND 游戏的地下城主 (DM)。请用中世纪奇幻风格与玩家互动，描述游戏世界、NPC 反应和事件结果。保持简短（不超过 50 字）。'
-      : `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+      ? DM_BASE_PROMPT
+      : `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话。`;
 
     return set({
       isOpen: true,

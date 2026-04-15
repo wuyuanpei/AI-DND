@@ -91,7 +91,7 @@ const GameLayout: React.FC = () => {
             <Inventory />
           </div>
           {/* 对话框 - 中间 flex-1 */}
-          <div className="flex-1 bg-gray-700 rounded-lg p-3 h-full overflow-hidden">
+          <div className="flex-1 min-w-0 bg-gray-700 rounded-lg p-3 h-full overflow-hidden">
             <Dialogue />
           </div>
           {/* 技能 - 右侧 200px */}

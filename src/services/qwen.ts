@@ -1,7 +1,5 @@
 import { logApiCall, logApiError } from '../store/logStore';
 
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -19,13 +17,16 @@ export interface ChatResponse {
 }
 
 /**
- * 与NPC对话（通过DeepSeek API）
+ * 与NPC对话（通过通义千问 API）
  */
 export async function chatWithNPC(
+  npcName: string,
   systemPrompt: string,
   history: ChatMessage[],
   userMessage: string,
-  apiKey: string
+  apiKey: string,
+  model: string,
+  apiUrl: string
 ): Promise<ChatResponse> {
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
@@ -34,20 +35,20 @@ export async function chatWithNPC(
   ];
 
   const config = {
-    model: 'deepseek-chat',
-    temperature: 0.7,
-    max_tokens: 100
+    model,
+    temperature: 0.3,
+    enable_thinking: false
   };
 
   // 记录 API 调用请求信息
-  logApiCall(`API 调用: chatWithNPC (NPC: ${extractNpcName(systemPrompt)})`, {
+  logApiCall(`API 调用: chatWithNPC (NPC: ${npcName}, 模型: ${model})`, {
     systemPrompt,
     historyCount: history.length,
     userMessage,
     config,
   });
 
-  const response = await fetch(DEEPSEEK_API_URL, {
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -77,7 +78,7 @@ export async function chatWithNPC(
   };
 
   // 记录 API 调用响应信息
-  logApiCall(`API 返回成功 (NPC: ${extractNpcName(systemPrompt)})`, {
+  logApiCall(`API 返回成功 (NPC: ${npcName}, 模型: ${model})`, {
     response: result.content,
     usage: result.usage,
     config,
@@ -86,32 +87,28 @@ export async function chatWithNPC(
   return result;
 }
 
-// 从系统提示中提取 NPC 名称（用于日志显示）
-function extractNpcName(systemPrompt: string): string {
-  const match = systemPrompt.match(/你是 DND 游戏中的(.+?)[。\.]/);
-  return match ? match[1] : '未知';
-}
-
 /**
  * 多轮对话（保持上下文）
  */
 export async function chatWithContext(
   messages: ChatMessage[],
-  apiKey: string
+  apiKey: string,
+  model: string,
+  apiUrl: string
 ): Promise<string> {
   const config = {
-    model: 'deepseek-chat',
-    temperature: 0.7,
-    max_tokens: 100
+    model,
+    temperature: 0.3,
+    enable_thinking: false
   };
 
   // 记录 API 调用请求信息
-  logApiCall('API 调用: chatWithContext', {
+  logApiCall(`API 调用: chatWithContext (模型: ${model})`, {
     messages,
     config,
   });
 
-  const response = await fetch(DEEPSEEK_API_URL, {
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -134,7 +131,7 @@ export async function chatWithContext(
   const content = data.choices[0].message.content;
 
   // 记录 API 调用响应信息
-  logApiCall('API 返回成功 (chatWithContext)', {
+  logApiCall(`API 返回成功 (chatWithContext, 模型: ${model})`, {
     response: content,
     usage: {
       promptTokens: data.usage?.prompt_tokens || 0,

@@ -1,6 +1,6 @@
 # AI-DND
 
-一个基于 React + TypeScript + Vite 的 DND 风格角色扮演游戏。使用 DeepSeek API 实现与 NPC 的智能对话。
+一个基于 React + TypeScript + Vite 的 DND 风格角色扮演游戏。支持 DeepSeek 与通义千问 API 实现与 NPC 的智能对话。
 
 ## 技术栈
 
@@ -108,15 +108,20 @@ interface MapData {
 - D (紫色) - 传送门
 - E (红色) - 敌人
 
-### 5. DeepSeek API 对话 (`src/services/deepseek.ts`)
+### 5. LLM API 对话 (`src/services/qwen.ts`)
 
-调用 DeepSeek API 实现 NPC 智能对话。
+统一封装的大模型对话服务，支持多服务商切换。
+
+**支持的模型服务商：**
+
+| 服务商 | API URL | 可用模型 |
+|--------|---------|----------|
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` | `qwen3.5-flash`、`qwen3.6-plus`、`qwen3.5-plus`、`qwen3-max` |
+| DeepSeek | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
 
 **API 配置：**
-- URL: `https://api.deepseek.com/v1/chat/completions`
-- 模型：`deepseek-chat`
-- temperature: 0.7
-- max_tokens: 100
+- temperature: 0.3
+- enable_thinking: false
 
 **返回格式：**
 ```typescript
@@ -146,7 +151,10 @@ interface ChatResponse {
 - 存档时间戳
 
 **API Key 持久化：**
-- 单独存储在 `ai-dnd-deepseek-api-key`
+- 千问 API Key：`ai-dnd-qwen-api-key`
+- DeepSeek API Key：`ai-dnd-deepseek-api-key`
+- 当前服务商：`ai-dnd-provider`
+- 当前模型：`ai-dnd-qwen-model` / `ai-dnd-deepseek-model`
 - 重启后仍然存在
 
 ### 7. 对话系统特性 (`src/store/dialogueStore.ts`)
@@ -195,14 +203,15 @@ moveSpeed: 10;        // 玩家移动速度
 interactionRange: 50; // NPC 交互范围
 ```
 
-### API 配置 (`src/services/deepseek.ts`)
+### API 配置 (`src/services/qwen.ts`)
 
 ```typescript
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 // 可在 chatWithNPC 函数中调整：
-// - temperature: 0.7  (创造力，0-2)
-// - max_tokens: 100   (最大输出长度)
+// - temperature: 0.3  (创造力，0-2；越低越确定)
+// - enable_thinking: false  (是否启用推理过程)
 ```
+
+服务商切换会自动使用对应的 API URL，无需手动修改代码。
 
 ### API 统计配置 (`src/store/settingsStore.ts`)
 
@@ -242,10 +251,12 @@ src/
 │   ├── Spells/        # 技能栏
 │   ├── Stats/         # 玩家状态
 │   └── WorldPanel/    # 世界状态面板
+├── config/
+│   └── dmConfig.ts    # DM 基础提示词配置
 ├── data/
 │   └── rules.json     # 游戏规则文档
 ├── services/
-│   └── deepseek.ts    # DeepSeek API 服务
+│   └── qwen.ts        # 统一 LLM API 服务
 ├── store/
 │   ├── dialogueStore.ts  # 对话状态
 │   ├── playerStore.ts    # 玩家状态
@@ -325,10 +336,21 @@ export interface Item {
 
 ### 自定义 NPC 对话
 
-在 `rules.json` 中添加对话规则，或修改 `deepseek.ts` 中的系统提示词：
+在 `rules.json` 中添加对话规则，或修改 `src/services/qwen.ts` 中的系统提示词参数。
 
-```typescript
-const systemPrompt = `你是 DND 游戏中的${npcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含以下核心规则：
+- **游戏相关性判定**：无关问题会被引导回游戏，不透露 AI 身份
+- **角色与风格**：中世纪奇幻 DM，沉浸式叙述
+- **长度控制**：根据内容需要自然展开，不刻意压缩
+- **剧情推进**：适时主动推动剧情
+- **世界观一致性**：禁止超时代元素
+
+当有剧本导入时，最终 DM 提示词格式为：
+```
+{DM_BASE_PROMPT}
+
+===== 剧本设定 =====
+{剧本中的 dmPrompt}
 ```
 
 ## 剧本格式
@@ -438,9 +460,26 @@ npcs:
 - 数据持久化到 localStorage
 - 界面底部实时显示统计信息
 
+### 多服务商支持
+- 支持切换 通义千问 / DeepSeek 两个模型服务商
+- 千问可选模型：`qwen3.5-flash`、`qwen3.6-plus`、`qwen3.5-plus`、`qwen3-max`
+- DeepSeek 可选模型：`deepseek-chat`
+- 每个服务商独立保存 API Key 和模型选择
+
+### DM 提示词配置
+- 新增 `src/config/dmConfig.ts` 管理 DM 基础提示词
+- 核心规则：判定玩家对话是否与游戏相关，无关则拒绝回答
+- 最终 DM 提示词 = 基础配置 + 剧本 `dmPrompt` 拼接
+
+### API 参数调整
+- `temperature` 从 `0.7` 降至 `0.3`，回复更确定
+- 移除 `max_tokens` 限制，不再硬截断输出长度
+- 系统提示词去掉所有“不超过 X 字”约束
+
 ### 其他优化
 - 修复切换标签页时消息丢失问题
 - 修复思考中状态与标签页绑定
+- 修复关闭 NPC 标签页后未切回 DM 消息的问题
 - 移除隐藏标签页功能，简化交互
 
 ## 许可证

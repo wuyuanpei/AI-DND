@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useScriptStore } from '../../store/scriptStore';
-import { chatWithNPC } from '../../services/deepseek';
-import type { ChatMessage } from '../../services/deepseek';
+import { DM_BASE_PROMPT } from '../../config/dmConfig';
+import { chatWithNPC } from '../../services/qwen';
+import type { ChatMessage } from '../../services/qwen';
 import type { DialogueMessage } from '../../types';
 
 const Dialogue: React.FC = () => {
@@ -26,7 +27,7 @@ const Dialogue: React.FC = () => {
     openLLMDialogue,
   } = store;
 
-  const { deepseekApiKey, addApiUsage } = useSettingsStore();
+  const { addApiUsage } = useSettingsStore();
   const [userInput, setUserInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -44,8 +45,8 @@ const Dialogue: React.FC = () => {
       const scriptStore = useScriptStore.getState();
       const dmPrompt = scriptStore.getDmSystemPrompt();
       const systemPrompt = dmPrompt
-        ? `${dmPrompt}\n\n请用中世纪奇幻风格与玩家互动，保持简短（不超过 50 字）。`
-        : undefined;
+        ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
+        : `${DM_BASE_PROMPT}\n\n`;
       openLLMDialogue(DM_NPC_ID, 'DM', systemPrompt);
     }
   }, []);
@@ -60,7 +61,10 @@ const Dialogue: React.FC = () => {
 
   // 处理 LLM 对话输入
   const handleLLMSubmit = async () => {
-    if (!userInput.trim() || !deepseekApiKey) return;
+    const apiKey = useSettingsStore.getState().getCurrentApiKey();
+    const model = useSettingsStore.getState().getCurrentModel();
+    const apiUrl = useSettingsStore.getState().getCurrentApiUrl();
+    if (!userInput.trim() || !apiKey) return;
 
     // 保存当前的 npcId 和 npcName，防止切换 tab 时变化
     const currentNpcId = store.npcId;
@@ -75,17 +79,17 @@ const Dialogue: React.FC = () => {
     let systemPrompt: string;
 
     if (currentNpcId === DM_NPC_ID) {
-      // DM：优先使用剧本的 dmPrompt
+      // DM：组合基础提示词 + 剧本的 dmPrompt
       const dmPrompt = scriptStore.getDmSystemPrompt();
       systemPrompt = dmPrompt
-        ? `${dmPrompt}\n\n请用中世纪奇幻风格与玩家互动，保持简短（不超过 50 字）。`
-        : `你是 DND 游戏的地下城主 (DM)。请用中世纪奇幻风格与玩家互动，描述游戏世界、NPC 反应和事件结果。保持简短（不超过 50 字）。`;
+        ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
+        : `${DM_BASE_PROMPT}\n\n`;
     } else {
       // NPC：优先使用剧本中该 NPC 的 systemPrompt
       const npcSystemPrompt = scriptStore.getNpcSystemPrompt(currentNpcId);
       systemPrompt = npcSystemPrompt
         ? npcSystemPrompt
-        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话，保持简短（不超过 50 字）。`;
+        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
     }
 
     setLoading(true);
@@ -100,10 +104,13 @@ const Dialogue: React.FC = () => {
       }));
 
       const response = await chatWithNPC(
+        currentNpcId === DM_NPC_ID ? 'DM' : currentNpcName,
         systemPrompt,
         history,
         userInput,
-        deepseekApiKey
+        apiKey,
+        model,
+        apiUrl
       );
       // 更新 API 统计
       addApiUsage(response.usage);
@@ -158,10 +165,10 @@ const Dialogue: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden min-w-0" style={{ minWidth: 0 }}>
       {/* Tab 导航栏 */}
       <div className="flex-shrink-0 border-b border-gray-600 pb-1">
-        <div className="flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-1 overflow-x-hidden">
           {/* 可见标签 */}
           {visibleTabs.map(tab => (
             <div
@@ -194,25 +201,29 @@ const Dialogue: React.FC = () => {
       </div>
 
       {/* 对话内容 - 固定高度可滚动区域 */}
-      <div className="flex-1 overflow-y-auto mb-2 text-white text-sm min-h-0 max-h-full">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden mb-2 text-white text-sm min-h-0 max-h-full min-w-0" style={{ minWidth: 0 }}>
         {/* 脚本模式：显示当前节点文本 */}
         {mode === 'scripted' && currentNode && (
-          <div className="bg-gray-600 rounded p-2 mb-2">{currentNode.text}</div>
+          <div
+            className="bg-gray-600 rounded p-2 mb-2 max-w-full"
+            style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
+          >{currentNode.text}</div>
         )}
 
         {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
-          <div className="space-y-2">
+          <div className="space-y-2 w-full" style={{ minWidth: 0 }}>
             {messages
               .filter((m) => m.role !== 'system')
               .map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`p-2 rounded ${
+                  className={`p-2 rounded max-w-[calc(100%-1rem)] ${
                     msg.role === 'user'
                       ? 'bg-blue-600 ml-4'
                       : 'bg-gray-600 mr-4'
                   }`}
+                  style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
                 >
                   {msg.content}
                 </div>
