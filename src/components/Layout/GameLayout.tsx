@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-import Map from '../Map/Map';
 import Equipment from '../Equipment/Equipment';
 import Spells from '../Spells/Spells';
 import Dialogue from '../Dialogue/Dialogue';
@@ -9,34 +8,11 @@ import Settings from '../Settings/Settings';
 import Rules from '../Rules/Rules';
 import Inventory from '../Inventory/Inventory';
 import GameLogs from '../GameLogs/GameLogs';
-import ScriptManager from '../ScriptManager/ScriptManager';
 import { saveGame, loadGame } from '../../store/saveSystem';
 import { useSettingsStore } from '../../store/settingsStore';
-import { useScriptStore } from '../../store/scriptStore';
-
-/**
- * 游戏主布局 - 4:3 比例
- *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │                                                                      │
- * │  ┌────────┐  ┌──────────────────────┐  ┌────────────────────────┐    │
- * │  │        │  │                      │  │  冒险者状态 (522px)    │    │
- * │  │ 世界   │  │                      │  ├────────────────────────┤   │
- * │  │ 状态   │  │       地 图          │  │  装备 (230px, 3x3)     │    │
- * │  │        │  │     (1024x768)       │  └────────────────────────┘    │
- * │  │        │  │                      │                                 │
- * │  └────────┘  └──────────────────────┘                                 │
- * │  ┌────────────┐  ┌─────────────────────────┐  ┌───────────────────┐   │
- * │  │ 背包 (4x5) │  │      对 话 栏           │  │  技能 (3x3)       │   │
- * │  │ 420px      │  │      420px              │  │  420px            │   │
- * │  └────────────┘  └─────────────────────────┘  └───────────────────┘   │
- * └──────────────────────────────────────────────────────────────────────┘
- */
 
 const GameLayout: React.FC = () => {
   const { apiCallCount, totalPromptTokens, totalCompletionTokens, totalTokens } = useSettingsStore();
-  const { activeScript } = useScriptStore();
-  const currentAct = activeScript?.acts.find(a => a.id === activeScript.currentActId);
 
   // 启动时加载存档
   useEffect(() => {
@@ -57,78 +33,39 @@ const GameLayout: React.FC = () => {
       <Rules />
       {/* 日志按钮 - 规则按钮左边 */}
       <GameLogs />
-      {/* 剧本按钮 - 日志按钮左边 */}
-      <ScriptManager />
-
-      {/* 剧本信息 - 页面最上方 */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-800 rounded-lg px-5 py-2 text-sm text-gray-300 max-w-[1024px] w-full border border-gray-600 shadow-lg">
-        {activeScript ? (
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="text-yellow-400 font-bold text-base whitespace-nowrap">{activeScript.title}</span>
-              {currentAct ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-yellow-300 text-sm font-medium whitespace-nowrap">▸ {currentAct.title}</span>
-                  <span className="text-gray-500 text-xs truncate">{currentAct.synopsis}</span>
-                </div>
-              ) : (
-                activeScript.description && <span className="text-gray-500 text-xs truncate">{activeScript.description}</span>
-              )}
-            </div>
-            {activeScript.author && (
-              <span className="text-gray-500 text-xs whitespace-nowrap flex-shrink-0">作者：{activeScript.author}</span>
-            )}
-          </div>
-        ) : (
-          <div className="text-center text-gray-500">未导入剧本</div>
-        )}
-      </div>
 
       {/* 主容器 */}
-      <div className="flex flex-col gap-4 bg-gray-800 rounded-lg p-4">
-        {/* 上半部分：地图 + 左右面板 */}
-        <div className="flex gap-4">
-          {/* 左侧面板：200px 宽 */}
-          <div className="w-[200px] flex flex-col gap-4">
-            <div className="bg-gray-700 rounded-lg p-3 flex-1 min-h-[400px]">
-              <WorldPanel />
-            </div>
+      <div className="flex gap-4 bg-gray-800 rounded-lg p-4">
+        {/* 左侧列：世界状态 + 背包 */}
+        <div className="w-[200px] flex flex-col gap-4">
+          <div className="bg-gray-700 rounded-lg p-3 h-[768px]">
+            <WorldPanel />
           </div>
-
-          {/* 中央地图：1024x768 */}
-          <div className="bg-gray-700 rounded-lg overflow-hidden">
-            <Map />
-          </div>
-
-          {/* 右侧面板：200px 宽 */}
-          <div className="w-[200px] flex flex-col gap-4">
-            <div className="bg-gray-700 rounded-lg p-3 h-[522px]">
-              <Stats />
-            </div>
-            <div className="bg-gray-700 rounded-lg p-3 h-[230px]">
-              <Equipment />
-            </div>
+          <div className="bg-gray-700 rounded-lg p-3 h-[420px]">
+            <Inventory />
           </div>
         </div>
 
-        {/* 下半部分：背包 + 对话框 + 技能 - 固定 420px 高 */}
-        <div className="flex gap-4 h-[420px]">
-          {/* 背包 - 左侧 200px */}
-          <div className="w-[200px] bg-gray-700 rounded-lg p-3 h-full">
-            <Inventory />
+        {/* 中间列：对话栏（占据原地图+下排对话区域） */}
+        <div className="w-[1024px] min-w-0 bg-gray-700 rounded-lg p-3 overflow-hidden" style={{ height: '1192px' }}>
+          <Dialogue />
+        </div>
+
+        {/* 右侧列：状态 + 装备 + 技能 */}
+        <div className="w-[200px] flex flex-col gap-4">
+          <div className="bg-gray-700 rounded-lg p-3 h-[522px]">
+            <Stats />
           </div>
-          {/* 对话框 - 中间 固定宽度 */}
-          <div className="w-[1024px] min-w-0 bg-gray-700 rounded-lg p-3 h-full overflow-hidden">
-            <Dialogue />
+          <div className="bg-gray-700 rounded-lg p-3 h-[230px]">
+            <Equipment />
           </div>
-          {/* 技能 - 右侧 200px */}
-          <div className="w-[200px] bg-gray-700 rounded-lg p-3 h-full">
+          <div className="bg-gray-700 rounded-lg p-3 flex-1">
             <Spells />
           </div>
         </div>
 
-        {/* API 统计信息 - 底部 */}
-        <div className="flex items-center justify-center gap-6 text-xs text-gray-400">
+        {/* API 统计信息 - 底部（通过绝对定位保持在页面底部） */}
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-6 text-xs text-gray-400">
           <span>API 调用：{apiCallCount} 次</span>
           <span>Prompt Token: {totalPromptTokens}</span>
           <span>Completion Token: {totalCompletionTokens}</span>

@@ -48,8 +48,6 @@ interface SettingsState {
   deepseekApiKey: string | null;
   qwenModel: string;
   deepseekModel: string;
-  moveSpeed: number;
-  interactionRange: number;
   apiCallCount: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
@@ -58,8 +56,6 @@ interface SettingsState {
   setProvider: (provider: Provider) => void;
   setApiKey: (provider: Provider, key: string | null) => void;
   setModel: (provider: Provider, model: string) => void;
-  setMoveSpeed: (speed: number) => void;
-  setInteractionRange: (range: number) => void;
   addApiUsage: (usage: TokenUsage) => void;
   resetStats: () => void;
   // 获取当前 provider 的配置
@@ -74,8 +70,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   deepseekApiKey: getStoredApiKey('deepseek'),
   qwenModel: getStoredModel('qwen'),
   deepseekModel: getStoredModel('deepseek'),
-  moveSpeed: 10,
-  interactionRange: 50,
   apiCallCount: 0,
   totalPromptTokens: 0,
   totalCompletionTokens: 0,
@@ -103,8 +97,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set(provider === 'qwen' ? { qwenModel: model } : { deepseekModel: model });
     logSystem(`模型切换 (${provider}): ${oldModel || '无'} → ${model}`);
   },
-  setMoveSpeed: (speed) => set({ moveSpeed: speed }),
-  setInteractionRange: (range) => set({ interactionRange: range }),
   addApiUsage: (usage) => {
     set((state) => ({
       apiCallCount: state.apiCallCount + 1,

@@ -1,7 +1,6 @@
 import { usePlayerStore } from './playerStore';
 import { useWorldStore } from './worldStore';
 import { useSettingsStore } from './settingsStore';
-import { useScriptStore } from './scriptStore';
 
 const SAVE_KEY = 'ai-dnd-save';
 
@@ -9,7 +8,6 @@ interface SaveData {
   player: ReturnType<typeof usePlayerStore.getState>;
   world: ReturnType<typeof useWorldStore.getState>;
   settings: ReturnType<typeof useSettingsStore.getState>;
-  script: { activeScriptId: string | null };
   timestamp: number;
 }
 
@@ -21,7 +19,6 @@ export function saveGame(): void {
     player: usePlayerStore.getState(),
     world: useWorldStore.getState(),
     settings: useSettingsStore.getState(),
-    script: { activeScriptId: useScriptStore.getState().activeScriptId },
     timestamp: Date.now()
   };
 
@@ -39,14 +36,8 @@ export function loadGame(): boolean {
     const saveData: SaveData = JSON.parse(data);
 
     usePlayerStore.setState(saveData.player);
-    useWorldStore.setState({
-      ...saveData.world,
-      // 确保mapData不为null
-      mapData: saveData.world.mapData || useWorldStore.getState().mapData
-    });
+    useWorldStore.setState(saveData.world);
     useSettingsStore.setState(saveData.settings);
-    // 剧本状态由 scriptStore 的 IIFE 自动恢复，这里不覆盖
-    // 但如果存档中没有 activeScriptId，而 scriptStore 有，保留 scriptStore 的状态
 
     return true;
   } catch (error) {

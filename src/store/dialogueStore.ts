@@ -9,7 +9,6 @@ export const DM_NPC_ID = '__dm__';
 export interface DialogueTab {
   npcId: string;
   npcName: string;
-  inRange: boolean; // NPC 是否在交互范围内
 }
 
 interface DialogueState {
@@ -41,8 +40,6 @@ interface DialogueState {
   switchTab: (npcId: string) => void;
   // 关闭标签
   hideTab: (npcId: string) => void;
-  // 更新 NPC InRange 状态
-  updateInRange: (npcId: string, inRange: boolean) => void;
   // 获取可见标签
   getVisibleTabs: () => DialogueTab[];
 }
@@ -64,7 +61,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
     [DM_NPC_ID]: false
   },
   tabs: [
-    { npcId: DM_NPC_ID, npcName: 'DM', inRange: true }
+    { npcId: DM_NPC_ID, npcName: 'DM' }
   ],
   activeTabId: DM_NPC_ID,
   isLoading: false,
@@ -138,15 +135,6 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
     });
   },
 
-  // 更新 NPC InRange 状态
-  updateInRange: (npcId, inRange) => {
-    set((state) => ({
-      tabs: state.tabs.map(tab =>
-        tab.npcId === npcId ? { ...tab, inRange } : tab
-      )
-    }));
-  },
-
   openDialogue: (npcId, npcName, nodes, startNode) => {
     const state = get();
     // 保存当前标签的消息
@@ -189,7 +177,6 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
       const newTab: DialogueTab = {
         npcId,
         npcName,
-        inRange: true
       };
       set({
         tabs: [...state.tabs, newTab],
@@ -197,11 +184,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
         npcLoading: updatedNpcLoading
       });
     } else {
-      // 更新标签状态
       set({
-        tabs: state.tabs.map(tab =>
-          tab.npcId === npcId ? { ...tab, inRange: true } : tab
-        ),
         npcMessages: updatedNpcMessages,
         npcLoading: updatedNpcLoading
       });

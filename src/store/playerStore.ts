@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Position, Equipment, Item, Skill } from '../types';
+import type { Equipment, Item, Skill } from '../types';
 
 // 背包格子数量
 export const INVENTORY_SLOTS = 28;
@@ -22,7 +22,6 @@ export const getSkillCap = (level: number): number => {
 interface PlayerState {
   name: string;
   level: number;
-  position: Position;
   hp: number;
   maxHp: number;
   mp: number;
@@ -40,8 +39,6 @@ interface PlayerState {
 
   // Actions
   setName: (name: string) => void;
-  setPosition: (pos: Position) => void;
-  move: (dx: number, dy: number) => void;
   takeDamage: (amount: number) => void;
   heal: (amount: number) => void;
   addGold: (amount: number) => void;
@@ -51,12 +48,9 @@ interface PlayerState {
   getCurrentWeight: () => number;
 }
 
-const initialPosition: Position = { x: 512, y: 384 };
-
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   name: '冒险者',
   level: 1,
-  position: initialPosition,
   hp: 100,
   maxHp: 100,
   mp: 50,
@@ -72,13 +66,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   charisma: 10,
 
   setName: (name) => set({ name }),
-  setPosition: (pos) => set({ position: pos }),
-  move: (dx, dy) => set((state) => ({
-    position: {
-      x: state.position.x + dx,
-      y: state.position.y + dy
-    }
-  })),
   takeDamage: (amount) => set((state) => ({
     hp: Math.max(0, state.hp - amount)
   })),

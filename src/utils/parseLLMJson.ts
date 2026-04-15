@@ -1,8 +1,6 @@
 export interface ParseLLMJsonResult {
   parsed?: Record<string, unknown>;
   dialogue?: string;
-  switch_to_act?: string;
-  switch_to_ending?: string;
   error?: string;
 }
 
@@ -113,8 +111,6 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
     return {
       parsed,
       dialogue: typeof parsed.dialogue === 'string' ? parsed.dialogue : undefined,
-      switch_to_act: typeof parsed.switch_to_act === 'string' ? parsed.switch_to_act : undefined,
-      switch_to_ending: typeof parsed.switch_to_ending === 'string' ? parsed.switch_to_ending : undefined,
     };
   } catch {
     // ignore, try repair
@@ -129,19 +125,13 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
     return {
       parsed,
       dialogue: typeof parsed.dialogue === 'string' ? parsed.dialogue : undefined,
-      switch_to_act: typeof parsed.switch_to_act === 'string' ? parsed.switch_to_act : undefined,
-      switch_to_ending: typeof parsed.switch_to_ending === 'string' ? parsed.switch_to_ending : undefined,
     };
   } catch (e) {
     // Fallback: extract fields with regex
     const dialogue = extractOptionalStringField(str, 'dialogue');
-    const switch_to_act = extractOptionalStringField(str, 'switch_to_act') || extractOptionalStringField(str, 'switch_to_act');
-    const switch_to_ending = extractOptionalStringField(str, 'switch_to_ending');
 
     return {
       dialogue,
-      switch_to_act,
-      switch_to_ending,
       error: `JSON parse failed after repair: ${e instanceof Error ? e.message : String(e)}`,
     };
   }

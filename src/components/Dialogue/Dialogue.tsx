@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { useScriptStore } from '../../store/scriptStore';
 import { logError } from '../../store/logStore';
 import { DM_BASE_PROMPT } from '../../config/dmConfig';
 import { chatWithNPC } from '../../services/qwen';
@@ -33,45 +32,14 @@ const Dialogue: React.FC = () => {
 
   const visibleTabs = getVisibleTabs();
   const activeTabId = store.activeTabId;
-  const activeTab = visibleTabs.find(t => t.npcId === activeTabId);
   const isDM = activeTabId === DM_NPC_ID;
-
-  // 检查当前 NPC 是否在范围内（DM 始终在范围内）
-  const isInRange = isDM ? true : (activeTab?.inRange ?? false);
-
-  const { activeScript } = useScriptStore();
 
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!isOpen) {
-      const scriptStore = useScriptStore.getState();
-      const dmPrompt = scriptStore.getDmSystemPrompt();
-      const systemPrompt = dmPrompt
-        ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
-        : `${DM_BASE_PROMPT}\n\n`;
-      openLLMDialogue(DM_NPC_ID, 'DM', systemPrompt);
+      openLLMDialogue(DM_NPC_ID, 'DM', DM_BASE_PROMPT);
     }
   }, []);
-
-  // 当当前章节变化时，更新 DM 的系统提示词
-  useEffect(() => {
-    if (!isOpen) return;
-    const scriptStore = useScriptStore.getState();
-    const dmPrompt = scriptStore.getDmSystemPrompt();
-    const systemPrompt = dmPrompt
-      ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
-      : `${DM_BASE_PROMPT}\n\n`;
-
-    const state = useDialogueStore.getState();
-    const dmMessages = state.npcMessages[DM_NPC_ID] || [];
-    if (dmMessages.length > 0 && dmMessages[0].role === 'system') {
-      const newDmMessages = [{ role: 'system' as const, content: systemPrompt }, ...dmMessages.slice(1)];
-      useDialogueStore.setState({
-        npcMessages: { ...state.npcMessages, [DM_NPC_ID]: newDmMessages },
-        ...(state.activeTabId === DM_NPC_ID ? { messages: newDmMessages } : {})
-      });
-    }
-  }, [activeScript?.currentActId, isOpen]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -95,23 +63,10 @@ const Dialogue: React.FC = () => {
     // 获取历史对话（排除 system 消息）
     const historyMessages: DialogueMessage[] = store.messages.filter(m => m.role !== 'system');
 
-    // 根据剧本动态构建系统提示词
-    const scriptStore = useScriptStore.getState();
-    let systemPrompt: string;
-
-    if (currentNpcId === DM_NPC_ID) {
-      // DM：组合基础提示词 + 剧本的 dmPrompt
-      const dmPrompt = scriptStore.getDmSystemPrompt();
-      systemPrompt = dmPrompt
-        ? `${DM_BASE_PROMPT}\n\n===== 剧本设定 =====\n${dmPrompt}\n\n`
-        : `${DM_BASE_PROMPT}\n\n`;
-    } else {
-      // NPC：优先使用剧本中该 NPC 的 systemPrompt
-      const npcSystemPrompt = scriptStore.getNpcSystemPrompt(currentNpcId);
-      systemPrompt = npcSystemPrompt
-        ? npcSystemPrompt
-        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
-    }
+    // 构建系统提示词
+    const systemPrompt = currentNpcId === DM_NPC_ID
+      ? DM_BASE_PROMPT
+      : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
 
     setLoading(true);
     addMessage({ role: 'user', content: userInput });
@@ -136,7 +91,7 @@ const Dialogue: React.FC = () => {
       // 更新 API 统计
       addApiUsage(response.usage);
       let replyContent = response.content;
-      // 如果是 DM，尝试解析 JSON 响应，提取 dialogue 字段，并解析章节指令
+      // 如果是 DM，尝试解析 JSON 响应，提取 dialogue 字段
       if (currentNpcId === DM_NPC_ID) {
         const result = parseLLMJson(response.content);
         if (result.dialogue) {
@@ -146,7 +101,6 @@ const Dialogue: React.FC = () => {
         } else {
           logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
         }
-        scriptStore.updateScriptProgressByLLM(response.content);
       }
       // 使用保存的 npcId 添加回复，确保添加到正确的 tab
       addMessageToNpc(currentNpcId, { role: 'assistant', content: replyContent });
@@ -211,7 +165,7 @@ const Dialogue: React.FC = () => {
                 activeTabId === tab.npcId
                   ? 'bg-yellow-600 text-white'
                   : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-              } ${!tab.inRange && tab.npcId !== DM_NPC_ID ? 'opacity-50' : ''}`}
+              }`}
               onClick={() => switchTab(tab.npcId)}
             >
               <span>{tab.npcName}</span>
@@ -225,9 +179,6 @@ const Dialogue: React.FC = () => {
                 >
                   ✕
                 </button>
-              )}
-              {!tab.inRange && tab.npcId !== DM_NPC_ID && (
-                <span className="text-[8px]">(离开)</span>
               )}
             </div>
           ))}
@@ -293,36 +244,24 @@ const Dialogue: React.FC = () => {
 
         {/* LLM 模式：输入框 */}
         {mode === 'llm' && (
-          <>
-            {/* 当 NPC 离开时，显示提示 */}
-            {!isInRange && !isDM && (
-              <div className="text-gray-400 text-center text-xs py-2">
-                {activeTab?.npcName} 已离开，无法继续对话
-              </div>
-            )}
-
-            {/* 输入框 - DM 始终可用，NPC 需要在范围内 */}
-            {(isDM || isInRange) && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="flex-1 bg-gray-600 text-white text-sm p-2 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
-                  placeholder="输入消息..."
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
-                  disabled={isLoading}
-                />
-                <button
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
-                  onClick={handleLLMSubmit}
-                  disabled={isLoading || !userInput.trim()}
-                >
-                  发送
-                </button>
-              </div>
-            )}
-          </>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="flex-1 bg-gray-600 text-white text-sm p-2 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
+              placeholder="输入消息..."
+              value={userInput}
+              onChange={(e) => setUserInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
+              disabled={isLoading}
+            />
+            <button
+              className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
+              onClick={handleLLMSubmit}
+              disabled={isLoading || !userInput.trim()}
+            >
+              发送
+            </button>
+          </div>
         )}
       </div>
 

@@ -56,31 +56,7 @@ npm run preview
 - 满级 (10 级) 时 12 个技能槽
 - 公式：`技能上限 = 3 + (等级 - 1)`
 
-### 2. 世界系统 (`src/store/worldStore.ts`)
-
-管理地图、NPC、传送门等游戏世界元素。
-
-**地图数据结构：**
-```typescript
-interface MapData {
-  id: string;           // 地图 ID
-  name: string;         // 地图名称
-  background: string;   // 背景图片路径
-  width: number;        // 地图宽度 (默认 1024)
-  height: number;       // 地图高度 (默认 768, 4:3 比例)
-  markers: Marker[];    // 地图上的标记
-  collisions: Collision[]; // 碰撞区域
-}
-```
-
-**标记类型：**
-- `npc`: NPC 角色
-- `door`: 传送门/门
-- `enemy`: 敌人
-- `player`: 玩家
-- `item`: 物品
-
-### 3. 对话系统 (`src/store/dialogueStore.ts`)
+### 2. 对话系统 (`src/store/dialogueStore.ts`)
 
 支持两种对话模式：
 - **脚本模式**: 预定义的对话节点和选项
@@ -91,24 +67,7 @@ interface MapData {
 - 关闭对话后保留记录
 - 再次对话时恢复历史
 
-### 4. 地图系统 (`src/components/Map/Map.tsx`)
-
-**移动控制：**
-- WASD 或 方向键移动
-- 移动速度可配置
-
-**碰撞检测：**
-- 矩形碰撞区域
-- 圆形碰撞区域
-- 边界检查
-
-**地图标记渲染：**
-- P (蓝色) - 玩家
-- N (黄色) - NPC
-- D (紫色) - 传送门
-- E (红色) - 敌人
-
-### 5. LLM API 对话 (`src/services/qwen.ts`)
+### 4. LLM API 对话 (`src/services/qwen.ts`)
 
 统一封装的大模型对话服务，支持多服务商切换。
 
@@ -140,7 +99,7 @@ interface ChatResponse {
 - 数据持久化到 localStorage
 - 在游戏界面底部实时显示
 
-### 6. 存档系统 (`src/store/saveSystem.ts`)
+### 5. 存档系统 (`src/store/saveSystem.ts`)
 
 使用 LocalStorage 保存游戏进度。
 
@@ -157,18 +116,13 @@ interface ChatResponse {
 - 当前模型：`ai-dnd-qwen-model` / `ai-dnd-deepseek-model`
 - 重启后仍然存在
 
-### 7. 对话系统特性 (`src/store/dialogueStore.ts`)
+### 6. 对话系统特性 (`src/store/dialogueStore.ts`)
 
 **Tab 多对话管理：**
 - 默认 DM 标签页（始终存在，无法关闭）
 - NPC 标签页动态创建，可关闭
 - 每个 NPC 独立的对话历史
 - 切换标签页时保留各自的加载状态
-
-**距离检测：**
-- NPC 在交互范围内（50px）时可对话
-- 离开范围后输入框禁用，显示"已离开"提示
-- DM 始终可对话（不受距离限制）
 
 **异步处理：**
 - 请求时保存当前 NPC ID，防止切换导致消息错乱
@@ -184,23 +138,6 @@ export const INVENTORY_SLOTS = 20;      // 背包格子数量
 export const BASE_SKILL_SLOTS = 3;      // 基础技能槽数量
 export const MAX_LEVEL = 10;            // 最大等级
 export const WEIGHT_LIMIT = 50;         // 背包重量上限
-```
-
-### 地图配置 (`src/store/worldStore.ts`)
-
-```typescript
-const defaultMapData = {
-  width: 1024,    // 地图宽度
-  height: 768,    // 地图高度 (4:3 比例)
-  // ... 其他配置
-};
-```
-
-### 移动速度 (`src/store/settingsStore.ts`)
-
-```typescript
-moveSpeed: 10;        // 玩家移动速度
-interactionRange: 50; // NPC 交互范围
 ```
 
 ### API 配置 (`src/services/qwen.ts`)
@@ -245,7 +182,6 @@ src/
 │   ├── Equipment/      # 装备栏
 │   ├── Inventory/      # 背包
 │   ├── Layout/         # 主布局
-│   ├── Map/           # 地图及标记
 │   ├── Rules/         # 规则面板
 │   ├── Settings/      # 设置
 │   ├── Spells/        # 技能栏
@@ -268,57 +204,7 @@ src/
 └── main.tsx           # 入口文件
 ```
 
-## 游戏布局
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│                                                                      │
-│  ┌────────┐  ┌──────────────────────┐  ┌────────────────────────┐    │
-│  │        │  │                      │  │  冒险者状态 (522px)    │    │
-│  │ 世界   │  │                      │  ├────────────────────────┤   │
-│  │ 状态   │  │       地 图          │  │  装备 (230px, 3x3)     │    │
-│  │        │  │     (1024x768)       │  └────────────────────────┘    │
-│  │        │  │                      │                                 │
-│  └────────┘  └──────────────────────┘                                 │
-│  ┌────────────┐  ┌─────────────────────────┐  ┌───────────────────┐   │
-│  │ 背包 (4x5) │  │      对 话 栏           │  │  技能 (3x3)       │   │
-│  │ 420px      │  │      420px              │  │  420px            │   │
-│  └────────────┘  └─────────────────────────┘  └───────────────────┘   │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-## 操作说明
-
-| 按键 | 功能 |
-|------|------|
-| W/↑ | 向上移动 |
-| S/↓ | 向下移动 |
-| A/← | 向左移动 |
-| D/→ | 向右移动 |
-| 点击 NPC | 打开对话 |
-| Enter | 发送消息 |
-
 ## 扩展指南
-
-### 添加新地图
-
-在 `worldStore.ts` 中添加新的 `MapData`：
-
-```typescript
-const newMapData: MapData = {
-  id: 'forest',
-  name: '森林',
-  background: '/assets/maps/forest.png',
-  width: 1024,
-  height: 768,
-  markers: [
-    // 添加 NPC、传送门、敌人等
-  ],
-  collisions: [
-    // 添加碰撞区域
-  ]
-};
-```
 
 ### 添加新物品类型
 
@@ -345,156 +231,12 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 - **剧情推进**：适时主动推动剧情
 - **世界观一致性**：禁止超时代元素
 
-当有剧本导入时，最终 DM 提示词格式为：
-```
-{DM_BASE_PROMPT}
-
-===== 剧本设定 =====
-{剧本中的 dmPrompt}
-
-===== 剧本结构 =====
-1. 第一幕标题
-   概要：第一幕概要
-2. 第二幕标题
-   概要：第二幕概要
-...
-
-===== 当前章节：第一幕标题 =====
-{当前幕的详细剧情 content}
-```
-
-## 剧本格式
-
-剧本是一个 `.md` 文件，通过右上角「📖 剧本」按钮导入。文件采用 **YAML frontmatter** 格式，所有剧本内容都包含在顶部 `---` 分隔符之间的 YAML 结构中。
-
-### YAML frontmatter（必须）
-
-位于文件顶部，用 `---` 分隔。包含以下字段：
-
-| 字段 | 类型 | 必须 | 说明 |
-|------|------|------|------|
-| `title` | string | ✅ | 剧本标题 |
-| `description` | string | ❌ | 剧本简介 |
-| `author` | string | ❌ | 作者名 |
-| `dmPrompt` | string (多行) | ✅ | 给 DM 的提示词，作为 DM 对话的上下文 |
-| `acts` | array | ❌ | 幕列表（见下方结构） |
-| `endings` | array | ❌ | 结局列表（见下方结构） |
-| `npcs` | array | ❌ | NPC 列表（见下方结构） |
-
-### `acts` 结构
-
-每幕是一个对象：
-
-| 字段 | 类型 | 必须 | 说明 |
-|------|------|------|------|
-| `id` | string | ❌ | 幕的唯一标识（如 `act1`） |
-| `title` | string | ❌ | 幕标题 |
-| `synopsis` | string | ❌ | 幕概要 |
-| `content` | string (多行) | ❌ | 幕的详细剧情（约 500 字），会在当前章节下发送给 DM |
-
-### `endings` 结构
-
-每个结局是一个对象：
-
-| 字段 | 类型 | 必须 | 说明 |
-|------|------|------|------|
-| `id` | string | ❌ | 结局的唯一标识（如 `ending_seal`） |
-| `title` | string | ❌ | 结局标题 |
-| `condition` | string | ❌ | 触发条件 |
-| `synopsis` | string | ❌ | 结局概要 |
-| `content` | string (多行) | ❌ | 结局的详细剧情描述 |
-
-### `npcs` 结构
-
-每个 NPC 是一个对象：
-
-| 字段 | 类型 | 必须 | 说明 |
-|------|------|------|------|
-| `id` | string | ❌ | NPC 的唯一标识，需与地图 Marker 的 `id` 匹配才能生效 |
-| `name` | string | ❌ | NPC 显示名称 |
-| `summary` | string | ❌ | NPC 的一句话简介 |
-| `personality` | string | ❌ | 性格描述 |
-| `background` | string | ❌ | 背景故事 |
-| `dialogueStyle` | string | ❌ | 对话风格描述 |
-| `systemPrompt` | string (多行) | ❌ | 给该 NPC 的完整系统提示词，将替代默认提示发送给 LLM |
-| `stats` | object | ❌ | 四维能力数值（见下方结构） |
-
-### `stats` 结构
-
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `strength` | number | 10 | 力量 |
-| `agility` | number | 10 | 敏捷 |
-| `intelligence` | number | 10 | 智力 |
-| `charisma` | number | 10 | 魅力 |
-
-### 当前章节
-
-导入剧本后，游戏会自动将第一幕设为「当前章节」。你可以在剧本管理面板的「幕」标签页中切换当前章节。
-
-**DM 提示词拼接规则：**
-当玩家与 DM 对话时，系统会自动将以下内容拼接到 DM 的系统提示词中：
-1. 所有幕的 `title` 和 `synopsis`（作为整体剧本结构）
-2. 当前章节的 `content`（作为当前需要推进的详细剧情）
-
-### 示例文件
-
-参考项目中的 `src/data/example-script.yaml`，包含完整的三幕剧情和 10 个 NPC。
-
-### 示例格式
-
-```markdown
----
-title: "剧本标题"
-description: "剧本简介"
-author: "作者名"
-acts:
-  - id: act1
-    title: "第一幕标题"
-    synopsis: "第一幕概要"
-    content: |
-      第一幕的详细剧情内容，约500字左右。
-      可以包含场景描述、对话、关键事件等。
-  - id: act2
-    title: "第二幕标题"
-    synopsis: "第二幕概要"
-    content: |
-      第二幕的详细剧情内容...
-dmPrompt: |
-  给DM的提示词，作为DM对话的上下文
-  可以多行书写
-endings:
-  - id: ending1
-    title: "结局一"
-    condition: "触发条件描述"
-    synopsis: "结局概要"
-    content: |
-      结局的详细剧情描述...
-npcs:
-  - id: npc_elder
-    name: "村长"
-    summary: "NPC的一句话简介"
-    personality: "性格描述"
-    background: "背景故事"
-    dialogueStyle: "对话风格"
-    systemPrompt: |
-      给该NPC的完整系统提示词
-      将替代默认提示发送给LLM
-    stats:
-      strength: 8
-      agility: 5
-      intelligence: 12
-      charisma: 10
----
-```
-
 ## 最近修改
 
 ### Tab 对话系统
 - 添加 DM 永久标签页（游戏主持人，驱动游戏进程）
 - NPC 标签页动态创建，点击 X 关闭
 - 每个 NPC 独立的对话历史和加载状态
-- 距离检测：NPC 离开范围后输入框禁用
 - 异步请求绑定原 NPC ID，防止切换导致消息错乱
 
 ### API 统计功能
@@ -512,7 +254,6 @@ npcs:
 ### DM 提示词配置
 - 新增 `src/config/dmConfig.ts` 管理 DM 基础提示词
 - 核心规则：判定玩家对话是否与游戏相关，无关则拒绝回答
-- 最终 DM 提示词 = 基础配置 + 剧本 `dmPrompt` 拼接
 
 ### API 参数调整
 - `temperature` 从 `0.7` 降至 `0.3`，回复更确定
