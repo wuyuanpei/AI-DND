@@ -21,6 +21,7 @@ export function savePlayerStatsToStorage(): void {
     agility: s.agility,
     intelligence: s.intelligence,
     charisma: s.charisma,
+    weightLimit: s.weightLimit,
   }));
 }
 
@@ -45,6 +46,7 @@ export function loadPlayerStatsFromStorage(): boolean {
       agility: stats.agility,
       intelligence: stats.intelligence,
       charisma: stats.charisma,
+      weightLimit: stats.weightLimit ?? (stats.strength != null ? stats.strength * 10 : 100),
       // 兼容旧版：如果 localStorage 中仍有文本字段，先迁移到 IndexedDB
       ...(stats.name !== undefined ? { name: stats.name } : {}),
       ...(stats.gender !== undefined ? { gender: stats.gender } : {}),

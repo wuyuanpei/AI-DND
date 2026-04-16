@@ -94,7 +94,7 @@ const Dialogue: React.FC = () => {
     createCharacter(character);
     writePlayerJsonToDB(character.name, character.gender ?? '', character.appearance ?? '', character.personality ?? '', character.backstory ?? '');
     savePlayerStatsToStorage();
-    logMemory('写入玩家记忆卡片', `key: ai-dnd-player-md, name: ${character.name}`);
+    logMemory('写入玩家记忆卡片', `IndexedDB: playerJson, name: ${character.name}`);
 
     const dState = useDialogueStore.getState();
     const dmMessages = dState.npcMessages[DM_NPC_ID] || [];
@@ -129,7 +129,7 @@ const Dialogue: React.FC = () => {
     const state = usePlayerStore.getState();
     writePlayerJsonToDB(state.name, state.gender ?? '', state.appearance ?? '', state.personality ?? '', state.backstory ?? '');
     savePlayerStatsToStorage();
-    logMemory('更新玩家头像', `key: ai-dnd-player-md, name: ${state.name}, avatar updated`);
+    logMemory('更新玩家头像', `IndexedDB: avatar, name: ${state.name}, avatar updated`);
 
     setPendingCharacter(null);
     setGeneratingAvatars(false);

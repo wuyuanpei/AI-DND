@@ -1,9 +1,9 @@
 import React from 'react';
-import { usePlayerStore, INVENTORY_SLOTS, WEIGHT_LIMIT } from '../../store/playerStore';
+import { usePlayerStore, INVENTORY_SLOTS } from '../../store/playerStore';
 import type { Item } from '../../types';
 
 const Inventory: React.FC = () => {
-  const { inventory } = usePlayerStore();
+  const { inventory, weightLimit } = usePlayerStore();
 
   // 计算当前重量（物品数量）
   const currentWeight = Object.keys(inventory).length;
@@ -14,7 +14,7 @@ const Inventory: React.FC = () => {
         背包
       </h3>
       <div className="flex-1 overflow-hidden">
-        {/* 4 列 5 行 = 20 格 */}
+        {/* 4 列 7 行 = 28 格 */}
         <div className="grid grid-cols-4 gap-1.5 h-full content-start">
           {Array.from({ length: INVENTORY_SLOTS }).map((_, idx) => {
             const item = inventory[idx] as Item | undefined;
@@ -38,7 +38,7 @@ const Inventory: React.FC = () => {
       </div>
       {/* 重量显示 */}
       <div className="flex-shrink-0 mt-2 text-xs text-gray-400 flex justify-between">
-        <span>重量：{currentWeight} / {WEIGHT_LIMIT}</span>
+        <span>重量 (kg)：{currentWeight} / {weightLimit}</span>
       </div>
     </div>
   );

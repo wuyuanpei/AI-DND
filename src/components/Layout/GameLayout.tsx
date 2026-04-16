@@ -60,7 +60,7 @@ const GameLayout: React.FC = () => {
     useWorldStore.setState({});
     await clearPlayerData();
     clearPlayerStats();
-    logMemory('清空玩家记忆卡片', 'key: ai-dnd-player-md');
+    logMemory('清空玩家记忆卡片', 'IndexedDB: playerJson, avatar, logs');
   };
 
   return (

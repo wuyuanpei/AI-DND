@@ -91,7 +91,7 @@ const GameLogs: React.FC = () => {
             </div>
 
             {/* 过滤器 */}
-            <div className="flex items-center gap-1 p-2 border-b border-gray-600 bg-gray-750 overflow-x-auto">
+            <div className="flex items-center gap-1 py-3 px-2 border-b border-gray-600 bg-gray-750">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.value}

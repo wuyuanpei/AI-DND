@@ -7,8 +7,6 @@ export const INVENTORY_SLOTS = 28;
 export const BASE_SKILL_SLOTS = 3;
 // 最大等级
 export const MAX_LEVEL = 10;
-// 背包重量上限
-export const WEIGHT_LIMIT = 50;
 
 /**
  * 计算技能上限：基础 3 个 + 每级 +1，满级 10 级时 12 个
@@ -42,6 +40,7 @@ interface PlayerState {
   maxMp: number;
   exp: number;
   gold: number;
+  weightLimit: number;
   equipment: Equipment;
   inventory: Record<number, Item>; // 使用数字索引作为 key
   skills: Skill[];
@@ -81,6 +80,7 @@ const initialPlayerState = {
   maxMp: 50,
   exp: 0,
   gold: 0,
+  weightLimit: 100,
   equipment: {},
   inventory: {},
   skills: [],
@@ -99,29 +99,35 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   ...initialPlayerState,
 
   setName: (name) => set({ name }),
-  createCharacter: (character) => set({
-    isCreated: true,
-    name: character.name,
-    strength: character.strength,
-    agility: character.agility,
-    intelligence: character.intelligence,
-    charisma: character.charisma,
-    gender: character.gender,
-    appearance: character.appearance,
-    personality: character.personality,
-    backstory: character.backstory,
-    avatar: character.avatar,
-    hp: 100,
-    maxHp: 100,
-    mp: 50,
-    maxMp: 50,
-    level: 1,
-    exp: 0,
-    gold: 0,
-    equipment: {},
-    inventory: {},
-    skills: [],
-  }),
+  createCharacter: (character) => {
+    const maxHp = 10 * character.strength + 5 * character.agility;
+    const maxMp = 10 * character.intelligence;
+    const gold = 10 * character.charisma;
+    return set({
+      isCreated: true,
+      name: character.name,
+      strength: character.strength,
+      agility: character.agility,
+      intelligence: character.intelligence,
+      charisma: character.charisma,
+      gender: character.gender,
+      appearance: character.appearance,
+      personality: character.personality,
+      backstory: character.backstory,
+      avatar: character.avatar,
+      hp: maxHp,
+      maxHp,
+      mp: maxMp,
+      maxMp,
+      level: 1,
+      exp: 0,
+      gold,
+      weightLimit: 10 * character.strength,
+      equipment: {},
+      inventory: {},
+      skills: [],
+    });
+  },
   resetPlayer: () => set(initialPlayerState),
   takeDamage: (amount) => set((state) => ({
     hp: Math.max(0, state.hp - amount)
