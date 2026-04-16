@@ -5,7 +5,7 @@ export interface ImageGenResponse {
 }
 
 /**
- * 生成角色头像图片
+ * 生成角色头像图片（使用 DashScope 原生多模态生成接口）
  * @param prompt 图片生成提示词
  * @param apiKey API Key
  * @param model 模型名称
@@ -21,13 +21,22 @@ export async function generateCharacterPortrait(
 ): Promise<ImageGenResponse> {
   const config = {
     model,
-    prompt,
-    n,
-    size: '768x1024',
+    input: {
+      messages: [
+        {
+          role: 'user',
+          content: [{ text: prompt }],
+        },
+      ],
+    },
+    parameters: {
+      size: '768*1024',
+      n,
+    },
   };
 
   logApiCall(`API 调用: generateCharacterPortrait (模型: ${model})`, {
-    config: { apiUrl, prompt, n, size: config.size },
+    config: { apiUrl, prompt, n, size: config.parameters.size },
   });
 
   const response = await fetch(apiUrl, {
@@ -49,12 +58,25 @@ export async function generateCharacterPortrait(
   const data = await response.json();
   const urls: string[] = [];
 
-  if (Array.isArray(data.data)) {
-    for (const item of data.data) {
+  if (Array.isArray(data.output?.results)) {
+    for (const item of data.output.results) {
       if (typeof item.url === 'string') {
         urls.push(item.url);
       } else if (typeof item.b64_json === 'string') {
         urls.push(`data:image/png;base64,${item.b64_json}`);
+      }
+    }
+  } else if (Array.isArray(data.output?.choices)) {
+    for (const choice of data.output.choices) {
+      const contents = choice.message?.content;
+      if (Array.isArray(contents)) {
+        for (const c of contents) {
+          if (typeof c.image === 'string') {
+            urls.push(c.image);
+          } else if (typeof c.url === 'string') {
+            urls.push(c.url);
+          }
+        }
       }
     }
   }
@@ -64,25 +86,4 @@ export async function generateCharacterPortrait(
   });
 
   return { urls };
-}
-
-/**
- * 构建角色头像生成提示词
- */
-export function buildPortraitPrompt(character: {
-  name: string;
-  gender?: string;
-  appearance?: string;
-  personality?: string;
-  backstory?: string;
-}): string {
-  const parts = [
-    'A detailed fantasy character portrait in medieval style.',
-    character.gender ? `${character.gender} character.` : '',
-    character.appearance || '',
-    character.personality ? `Expression shows ${character.personality.toLowerCase()} personality.` : '',
-    character.backstory ? `Background hints at ${character.backstory.toLowerCase()}.` : '',
-    'High quality digital art, soft lighting, 3:4 portrait composition, single character centered, clear face, no text.',
-  ];
-  return parts.filter(Boolean).join(' ');
 }

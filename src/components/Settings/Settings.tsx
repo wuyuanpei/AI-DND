@@ -5,17 +5,21 @@ const QWEN_MODELS = [
   'qwen3.5-flash',
   'qwen3.6-plus',
   'qwen3.5-plus',
-  'qwen3-max',
+  'qwen3.max',
 ];
 
 const DEEPSEEK_MODELS = [
   'deepseek-chat',
 ];
 
+const IMAGE_MODELS = [
+  'qwen-image-2.0',
+];
+
 const Settings: React.FC = () => {
   const {
     provider, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel,
-    imageApiKey, imageModel, imageApiUrl,
+    imageApiKey, imageModel,
     setProvider, setApiKey, setModel, setImageConfig
   } = useSettingsStore();
   const [inputQwenKey, setInputQwenKey] = useState(qwenApiKey || '');
@@ -23,8 +27,7 @@ const Settings: React.FC = () => {
   const [selectedQwenModel, setSelectedQwenModel] = useState(qwenModel);
   const [selectedDeepseekModel, setSelectedDeepseekModel] = useState(deepseekModel);
   const [inputImageKey, setInputImageKey] = useState(imageApiKey || '');
-  const [inputImageModel, setInputImageModel] = useState(imageModel);
-  const [inputImageUrl, setInputImageUrl] = useState(imageApiUrl);
+  const [selectedImageModel, setSelectedImageModel] = useState(imageModel);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -33,9 +36,8 @@ const Settings: React.FC = () => {
     setSelectedQwenModel(qwenModel);
     setSelectedDeepseekModel(deepseekModel);
     setInputImageKey(imageApiKey || '');
-    setInputImageModel(imageModel);
-    setInputImageUrl(imageApiUrl);
-  }, [isOpen, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel, imageApiKey, imageModel, imageApiUrl]);
+    setSelectedImageModel(imageModel);
+  }, [isOpen, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel, imageApiKey, imageModel]);
 
   const handleSave = () => {
     setApiKey('qwen', inputQwenKey);
@@ -48,8 +50,7 @@ const Settings: React.FC = () => {
     }
     setImageConfig({
       apiKey: inputImageKey,
-      model: inputImageModel,
-      apiUrl: inputImageUrl,
+      model: selectedImageModel,
     });
     setIsOpen(false);
   };
@@ -69,9 +70,7 @@ const Settings: React.FC = () => {
             <div className="text-white font-bold text-lg mb-4">设置</div>
 
             <div className="mb-4">
-              <label className="text-gray-400 text-sm block mb-2">
-                服务商
-              </label>
+              <div className="text-white font-bold text-sm mb-3">文本生成配置</div>
               <div className="flex gap-2">
                 <button
                   className={`flex-1 text-sm p-3 rounded border ${
@@ -100,7 +99,7 @@ const Settings: React.FC = () => {
               <>
                 <div className="mb-4">
                   <label className="text-gray-400 text-sm block mb-2">
-                    千问 API Key（百炼平台）
+                    千问 API Key（文本生成）
                   </label>
                   <input
                     type="password"
@@ -125,7 +124,7 @@ const Settings: React.FC = () => {
 
                 <div className="mb-4">
                   <label className="text-gray-400 text-sm block mb-2">
-                    模型
+                    文本模型
                   </label>
                   <select
                     className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
@@ -144,7 +143,7 @@ const Settings: React.FC = () => {
               <>
                 <div className="mb-4">
                   <label className="text-gray-400 text-sm block mb-2">
-                    DeepSeek API Key
+                    DeepSeek API Key（文本生成）
                   </label>
                   <input
                     type="password"
@@ -169,7 +168,7 @@ const Settings: React.FC = () => {
 
                 <div className="mb-4">
                   <label className="text-gray-400 text-sm block mb-2">
-                    模型
+                    文本模型
                   </label>
                   <select
                     className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
@@ -185,11 +184,11 @@ const Settings: React.FC = () => {
             )}
 
             <div className="border-t border-gray-600 my-4 pt-4">
-              <div className="text-white font-bold text-sm mb-3">图片生成配置（角色头像）</div>
+              <div className="text-white font-bold text-sm mb-3">图片生成配置</div>
 
               <div className="mb-4">
                 <label className="text-gray-400 text-sm block mb-2">
-                  图片生成 API Key
+                  千问 API Key（图片生成）
                 </label>
                 <input
                   type="password"
@@ -199,7 +198,16 @@ const Settings: React.FC = () => {
                   onChange={(e) => setInputImageKey(e.target.value)}
                 />
                 <div className="text-xs text-gray-500 mt-1">
-                  默认使用 DashScope（百炼）图片生成 API
+                  从{' '}
+                    <a
+                      href="https://bailian.console.aliyun.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline"
+                    >
+                      百炼平台
+                    </a>{' '}
+                    获取 API Key
                 </div>
               </div>
 
@@ -207,26 +215,15 @@ const Settings: React.FC = () => {
                 <label className="text-gray-400 text-sm block mb-2">
                   图片模型
                 </label>
-                <input
-                  type="text"
+                <select
                   className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
-                  placeholder="例如 wanx2.1-t2i-plus"
-                  value={inputImageModel}
-                  onChange={(e) => setInputImageModel(e.target.value)}
-                />
-              </div>
-
-              <div className="mb-4">
-                <label className="text-gray-400 text-sm block mb-2">
-                  图片 API 地址
-                </label>
-                <input
-                  type="text"
-                  className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
-                  placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations"
-                  value={inputImageUrl}
-                  onChange={(e) => setInputImageUrl(e.target.value)}
-                />
+                  value={selectedImageModel}
+                  onChange={(e) => setSelectedImageModel(e.target.value)}
+                >
+                  {IMAGE_MODELS.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -235,7 +232,7 @@ const Settings: React.FC = () => {
                 className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded"
                 onClick={handleSave}
               >
-                保存
+                确定
               </button>
             </div>
           </div>

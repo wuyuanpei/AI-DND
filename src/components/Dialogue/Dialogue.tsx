@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
-import { useSettingsStore } from '../../store/settingsStore';
+import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
+import { savePlayerJson, saveAvatar } from '../../utils/playerDB';
+import { savePlayerStatsToStorage } from '../../utils/playerStats';
+
+const writePlayerJsonToDB = (name: string, gender: string, appearance: string, personality: string, backstory: string) => {
+  void savePlayerJson({ name, gender, appearance, personality, backstory }).catch((e) => logError('保存玩家文本到 IndexedDB 失败', e instanceof Error ? e.message : String(e)));
+};
 import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT } from '../../config/dmConfig';
 import { chatWithNPC } from '../../services/qwen';
-import { generateCharacterPortrait, buildPortraitPrompt } from '../../services/imageGen';
+import { generateCharacterPortrait } from '../../services/imageGen';
+import { buildPortraitPrompt } from '../../config/imageConfig';
 import type { ChatMessage } from '../../services/qwen';
 import type { DialogueMessage } from '../../types';
 import type { CharacterData } from '../../store/playerStore';
@@ -36,7 +43,6 @@ const Dialogue: React.FC = () => {
   const [npcOptions, setNpcOptions] = useState<Record<string, string[]>>({});
   const [pendingCharacter, setPendingCharacter] = useState<CharacterData | null>(null);
   const [generatingAvatars, setGeneratingAvatars] = useState(false);
-  const [avatarOptions, setAvatarOptions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = getVisibleTabs();
@@ -83,29 +89,12 @@ const Dialogue: React.FC = () => {
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
 
-  // 最终创建角色并保存
-  const finalizeCharacterCreation = (character: CharacterData, avatarUrl?: string) => {
-    const finalCharacter = { ...character, avatar: avatarUrl };
-    createCharacter(finalCharacter);
-    const md = `---
-name: "${finalCharacter.name}"
-level: 1
-gender: "${finalCharacter.gender ?? ''}"
-appearance: "${finalCharacter.appearance ?? ''}"
-personality: "${finalCharacter.personality ?? ''}"
-backstory: "${finalCharacter.backstory ?? ''}"
-strength: ${finalCharacter.strength}
-agility: ${finalCharacter.agility}
-intelligence: ${finalCharacter.intelligence}
-charisma: ${finalCharacter.charisma}
-avatar: "${finalCharacter.avatar ?? ''}"
----
-`;
-    localStorage.setItem('ai-dnd-player-md', md);
-    if (avatarUrl) {
-      localStorage.setItem('ai-dnd-player-avatar', avatarUrl);
-    }
-    logMemory('写入玩家记忆卡片', `key: ai-dnd-player-md, name: ${finalCharacter.name}`);
+  // 创建角色并写入记忆（不带头像，头像后续单独更新）
+  const writePlayerMemoryAndCreateCharacter = (character: CharacterData) => {
+    createCharacter(character);
+    writePlayerJsonToDB(character.name, character.gender ?? '', character.appearance ?? '', character.personality ?? '', character.backstory ?? '');
+    savePlayerStatsToStorage();
+    logMemory('写入玩家记忆卡片', `key: ai-dnd-player-md, name: ${character.name}`);
 
     const dState = useDialogueStore.getState();
     const dmMessages = dState.npcMessages[DM_NPC_ID] || [];
@@ -122,9 +111,38 @@ avatar: "${finalCharacter.avatar ?? ''}"
         ...(dState.activeTabId === DM_NPC_ID ? { messages: newDmMessages } : {}),
       });
     }
+  };
+
+  // 更新玩家头像
+  const updatePlayerAvatar = async (avatarUrl: string) => {
+    usePlayerStore.setState({ avatar: avatarUrl });
+
+    // 从云端下载图片 Blob 并保存到 IndexedDB
+    try {
+      const res = await fetch(avatarUrl);
+      const blob = await res.blob();
+      await saveAvatar(blob);
+    } catch (e) {
+      logError('保存头像 Blob 到 IndexedDB 失败', e instanceof Error ? e.message : String(e));
+    }
+
+    const state = usePlayerStore.getState();
+    writePlayerJsonToDB(state.name, state.gender ?? '', state.appearance ?? '', state.personality ?? '', state.backstory ?? '');
+    savePlayerStatsToStorage();
+    logMemory('更新玩家头像', `key: ai-dnd-player-md, name: ${state.name}, avatar updated`);
+
     setPendingCharacter(null);
-    setAvatarOptions([]);
     setGeneratingAvatars(false);
+  };
+
+  // 跳过头像选择
+  const clearAvatarSelection = async () => {
+    setPendingCharacter(null);
+    setGeneratingAvatars(false);
+
+    const state = usePlayerStore.getState();
+    writePlayerJsonToDB(state.name, state.gender ?? '', state.appearance ?? '', state.personality ?? '', state.backstory ?? '');
+    savePlayerStatsToStorage();
   };
 
   // 核心 LLM 发送逻辑
@@ -228,27 +246,30 @@ avatar: "${finalCharacter.avatar ?? ''}"
               return;
             }
 
-            // 属性校验通过，进入头像生成流程
+            // 属性校验通过，先创建角色并写入记忆，再进入头像生成流程
             addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+            writePlayerMemoryAndCreateCharacter(characterData);
+
             setPendingCharacter(characterData);
             setGeneratingAvatars(true);
-            setAvatarOptions([]);
 
-            const { imageApiKey, imageModel, imageApiUrl } = useSettingsStore.getState();
+            const { imageApiKey, imageModel } = useSettingsStore.getState();
             if (imageApiKey) {
               try {
                 const prompt = buildPortraitPrompt(characterData);
-                const res = await generateCharacterPortrait(prompt, imageApiKey, imageModel, imageApiUrl, 3);
-                setAvatarOptions(res.urls);
+                const res = await generateCharacterPortrait(prompt, imageApiKey, imageModel, IMAGE_API_URL, 1);
+                if (res.urls[0]) {
+                  await updatePlayerAvatar(res.urls[0]);
+                } else {
+                  clearAvatarSelection();
+                }
               } catch (e) {
                 logError('头像生成失败', e instanceof Error ? e.message : String(e));
-                finalizeCharacterCreation(characterData);
-              } finally {
-                setGeneratingAvatars(false);
+                clearAvatarSelection();
               }
             } else {
               // 未配置图片 API，跳过头像生成
-              finalizeCharacterCreation(characterData);
+              clearAvatarSelection();
             }
             return;
           }
@@ -445,37 +466,6 @@ avatar: "${finalCharacter.avatar ?? ''}"
               </div>
             )}
 
-            {/* 头像选择 */}
-            {pendingCharacter && !generatingAvatars && avatarOptions.length > 0 && (
-              <div className="bg-gray-700 rounded p-3 space-y-2">
-                <div className="text-white text-sm font-bold text-center">请选择一张作为角色头像</div>
-                <div className="flex justify-center gap-3">
-                  {avatarOptions.map((url, idx) => (
-                    <div key={idx} className="flex flex-col items-center gap-1">
-                      <img
-                        src={url}
-                        alt={`头像候选 ${idx + 1}`}
-                        className="rounded border border-gray-500 object-cover"
-                        style={{ width: '180px', height: '240px' }}
-                      />
-                      <button
-                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded"
-                        onClick={() => finalizeCharacterCreation(pendingCharacter, url)}
-                      >
-                        选为头像
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  className="w-full text-gray-400 hover:text-white text-xs py-1"
-                  onClick={() => finalizeCharacterCreation(pendingCharacter)}
-                >
-                  跳过，不使用头像
-                </button>
-              </div>
-            )}
-
             {/* 普通选项按钮 */}
             {!pendingCharacter && !isLoading && !generatingAvatars && (
               <div className="flex flex-wrap gap-2">
@@ -494,9 +484,9 @@ avatar: "${finalCharacter.avatar ?? ''}"
                 ) : (
                   <button
                     className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1.5 rounded border border-gray-500"
-                    onClick={() => handleOptionClick('请给我一些选项')}
+                    onClick={() => handleOptionClick('请给我一些决策选项')}
                   >
-                    请给我一些选项
+                    请给我一些决策选项
                   </button>
                 )}
               </div>
@@ -510,12 +500,12 @@ avatar: "${finalCharacter.avatar ?? ''}"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
-                disabled={isLoading || generatingAvatars || (pendingCharacter !== null && avatarOptions.length > 0)}
+                disabled={isLoading || generatingAvatars || pendingCharacter !== null}
               />
               <button
                 className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
                 onClick={handleLLMSubmit}
-                disabled={isLoading || !userInput.trim() || generatingAvatars || (pendingCharacter !== null && avatarOptions.length > 0)}
+                disabled={isLoading || !userInput.trim() || generatingAvatars || pendingCharacter !== null}
               >
                 发送
               </button>

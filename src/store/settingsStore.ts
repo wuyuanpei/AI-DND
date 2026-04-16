@@ -10,7 +10,9 @@ const DEEPSEEK_MODEL_STORAGE_KEY = 'ai-dnd-deepseek-model';
 
 const IMAGE_API_KEY_STORAGE_KEY = 'ai-dnd-image-api-key';
 const IMAGE_MODEL_STORAGE_KEY = 'ai-dnd-image-model';
-const IMAGE_API_URL_STORAGE_KEY = 'ai-dnd-image-api-url';
+
+export const IMAGE_API_URL = '/api/image-gen';
+export const IMAGE_MODEL = 'qwen-image-2.0';
 
 export type Provider = 'qwen' | 'deepseek';
 
@@ -51,17 +53,9 @@ const getStoredImageApiKey = (): string | null => {
 
 const getStoredImageModel = (): string => {
   try {
-    return localStorage.getItem(IMAGE_MODEL_STORAGE_KEY) || 'wanx2.1-t2i-plus';
+    return localStorage.getItem(IMAGE_MODEL_STORAGE_KEY) || IMAGE_MODEL;
   } catch {
-    return 'wanx2.1-t2i-plus';
-  }
-};
-
-const getStoredImageApiUrl = (): string => {
-  try {
-    return localStorage.getItem(IMAGE_API_URL_STORAGE_KEY) || 'https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations';
-  } catch {
-    return 'https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations';
+    return IMAGE_MODEL;
   }
 };
 
@@ -83,12 +77,11 @@ interface SettingsState {
   // 图片生成配置
   imageApiKey: string | null;
   imageModel: string;
-  imageApiUrl: string;
 
   setProvider: (provider: Provider) => void;
   setApiKey: (provider: Provider, key: string | null) => void;
   setModel: (provider: Provider, model: string) => void;
-  setImageConfig: (config: { apiKey?: string; model?: string; apiUrl?: string }) => void;
+  setImageConfig: (config: { apiKey?: string; model?: string }) => void;
   addApiUsage: (usage: TokenUsage) => void;
   resetStats: () => void;
   // 获取当前 provider 的配置
@@ -109,7 +102,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   totalTokens: 0,
   imageApiKey: getStoredImageApiKey(),
   imageModel: getStoredImageModel(),
-  imageApiUrl: getStoredImageApiUrl(),
 
   setProvider: (provider) => {
     localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
@@ -146,10 +138,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (config.model !== undefined) {
       localStorage.setItem(IMAGE_MODEL_STORAGE_KEY, config.model);
       updates.imageModel = config.model;
-    }
-    if (config.apiUrl !== undefined) {
-      localStorage.setItem(IMAGE_API_URL_STORAGE_KEY, config.apiUrl);
-      updates.imageApiUrl = config.apiUrl;
     }
     set(updates);
     logSystem('图片模型配置更新', JSON.stringify(updates));

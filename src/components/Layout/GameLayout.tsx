@@ -9,35 +9,58 @@ import Rules from '../Rules/Rules';
 import Inventory from '../Inventory/Inventory';
 import GameLogs from '../GameLogs/GameLogs';
 import Memory from '../Memory/Memory';
-import { saveGame, loadGame, deleteSave } from '../../store/saveSystem';
 import { useSettingsStore } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { useDialogueStore } from '../../store/dialogueStore';
 import { useWorldStore } from '../../store/worldStore';
 import { logMemory } from '../../store/logStore';
+import { loadPlayerJson, loadAvatar, clearPlayerData } from '../../utils/playerDB';
+import { savePlayerStatsToStorage, loadPlayerStatsFromStorage, clearPlayerStats } from '../../utils/playerStats';
 
 const GameLayout: React.FC = () => {
   const { apiCallCount, totalPromptTokens, totalCompletionTokens, totalTokens } = useSettingsStore();
 
-  // 启动时加载存档
+  // 启动时从 localStorage 恢复玩家数值，从 IndexedDB 加载文本、player.md 和头像
   useEffect(() => {
-    loadGame();
+    (async () => {
+      // 先从 localStorage 恢复数值
+      loadPlayerStatsFromStorage();
+
+      // 从 IndexedDB 加载玩家文本信息并回填到 playerStore
+      const text = await loadPlayerJson();
+      if (text) {
+        usePlayerStore.setState({
+          name: text.name,
+          gender: text.gender,
+          appearance: text.appearance,
+          personality: text.personality,
+          backstory: text.backstory,
+        });
+      }
+
+      // 从 IndexedDB 加载头像 Blob 并转为 data URL
+      const avatar = await loadAvatar();
+      if (avatar) {
+        usePlayerStore.setState({ avatar });
+      }
+    })();
   }, []);
 
-  // 自动保存（每 30 秒）
+  // 玩家状态变化时自动持久化到 localStorage
   useEffect(() => {
-    const interval = setInterval(saveGame, 30000);
-    return () => clearInterval(interval);
+    const unsubscribe = usePlayerStore.subscribe(() => {
+      savePlayerStatsToStorage();
+    });
+    return unsubscribe;
   }, []);
 
-  const handleRestart = () => {
+  const handleRestart = async () => {
     usePlayerStore.getState().resetPlayer();
     useDialogueStore.getState().resetDialogue();
     useWorldStore.setState({});
-    deleteSave();
+    await clearPlayerData();
+    clearPlayerStats();
     logMemory('清空玩家记忆卡片', 'key: ai-dnd-player-md');
-    localStorage.removeItem('ai-dnd-player-md');
-    localStorage.removeItem('ai-dnd-player-avatar');
   };
 
   return (

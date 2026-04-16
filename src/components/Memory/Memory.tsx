@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { logSystem } from '../../store/logStore';
+import { loadPlayerJson, type PlayerJson } from '../../utils/playerDB';
 
 interface MemoryEntry {
   key: string;
   title: string;
-  content: string;
+  data: PlayerJson;
   updatedAt: string;
 }
 
 const MEMORY_KEYS = [
-  { key: 'ai-dnd-player-md', title: '玩家卡片' },
+  { key: 'ai-dnd-player-md', title: '玩家卡片', loader: loadPlayerJson },
 ];
 
 const Memory: React.FC = () => {
@@ -20,25 +21,27 @@ const Memory: React.FC = () => {
   useEffect(() => {
     if (!isOpen) return;
 
-    const loaded: MemoryEntry[] = [];
-    for (const meta of MEMORY_KEYS) {
-      const raw = localStorage.getItem(meta.key);
-      if (raw) {
-        loaded.push({
-          key: meta.key,
-          title: meta.title,
-          content: raw,
-          updatedAt: new Date().toLocaleString('zh-CN'),
-        });
+    (async () => {
+      const loaded: MemoryEntry[] = [];
+      for (const meta of MEMORY_KEYS) {
+        const raw: PlayerJson | null = await meta.loader();
+        if (raw) {
+          loaded.push({
+            key: meta.key,
+            title: meta.title,
+            data: raw,
+            updatedAt: new Date().toLocaleString('zh-CN'),
+          });
+        }
       }
-    }
-    logSystem('记忆面板读取', `读取了 ${loaded.length} 条记忆记录`);
-    setEntries(loaded);
-    if (loaded.length > 0) {
-      setSelectedKey(loaded[0].key);
-    } else {
-      setSelectedKey(null);
-    }
+      logSystem('记忆面板读取', `读取了 ${loaded.length} 条记忆记录`);
+      setEntries(loaded);
+      if (loaded.length > 0) {
+        setSelectedKey(loaded[0].key);
+      } else {
+        setSelectedKey(null);
+      }
+    })();
   }, [isOpen]);
 
   const selectedEntry = entries.find((e) => e.key === selectedKey);
@@ -100,11 +103,45 @@ const Memory: React.FC = () => {
               {/* 右侧详情 */}
               <div className="flex-1 overflow-y-auto p-4">
                 {selectedEntry ? (
-                  <div className="space-y-2">
-                    <div className="text-gray-400 text-xs">{selectedEntry.title}</div>
-                    <pre className="bg-gray-900 text-gray-300 text-xs p-3 rounded whitespace-pre-wrap break-all font-mono">
-                      {selectedEntry.content}
-                    </pre>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-gray-400 text-xs">{selectedEntry.title}</div>
+                      <div className="text-gray-500 text-[10px]">{selectedEntry.updatedAt}</div>
+                    </div>
+
+                    <div className="bg-gray-700/50 rounded-lg p-4 space-y-4 border border-gray-600/50">
+                      <div>
+                        <div className="text-xl font-bold text-white">{selectedEntry.data.name}</div>
+                        {selectedEntry.data.gender ? (
+                          <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-600/30 text-blue-200 border border-blue-500/30">
+                            {selectedEntry.data.gender}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="h-px bg-gray-600/50" />
+
+                      {selectedEntry.data.appearance ? (
+                        <div>
+                          <div className="text-xs font-semibold text-yellow-500 mb-1">外貌</div>
+                          <div className="text-sm text-gray-200 leading-relaxed">{selectedEntry.data.appearance}</div>
+                        </div>
+                      ) : null}
+
+                      {selectedEntry.data.personality ? (
+                        <div>
+                          <div className="text-xs font-semibold text-green-500 mb-1">性格</div>
+                          <div className="text-sm text-gray-200 leading-relaxed">{selectedEntry.data.personality}</div>
+                        </div>
+                      ) : null}
+
+                      {selectedEntry.data.backstory ? (
+                        <div>
+                          <div className="text-xs font-semibold text-purple-500 mb-1">背景</div>
+                          <div className="text-sm text-gray-200 leading-relaxed">{selectedEntry.data.backstory}</div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-gray-500 text-sm text-center py-8">暂无记忆内容</div>
