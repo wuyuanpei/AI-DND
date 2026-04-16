@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { saveGameLogs, loadGameLogs, clearGameLogs } from '../utils/playerDB';
 
 export type LogLevel = 'info' | 'warn' | 'error';
 export type GameLogCategory = 'api' | 'system' | 'ui' | 'combat' | 'world' | 'memory';
@@ -12,17 +13,7 @@ export interface GameLog {
   details?: string; // 额外的 JSON 格式详情
 }
 
-const LOG_STORAGE_KEY = 'ai-dnd-game-logs';
 const MAX_LOGS = 1000; // 最多保留 1000 条日志
-
-const getStoredLogs = (): GameLog[] => {
-  try {
-    const data = localStorage.getItem(LOG_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-};
 
 interface LogState {
   logs: GameLog[];
@@ -32,10 +23,8 @@ interface LogState {
   getLogsByCategory: (category: GameLogCategory) => GameLog[];
 }
 
-const initialLogs = getStoredLogs();
-
 export const useLogStore = create<LogState>((set, get) => ({
-  logs: initialLogs,
+  logs: [],
 
   addLog: ({ level, category, message, details }) => {
     set((state) => {
@@ -48,13 +37,13 @@ export const useLogStore = create<LogState>((set, get) => ({
         details,
       };
       const newLogs = [newLog, ...state.logs].slice(0, MAX_LOGS);
-      localStorage.setItem(LOG_STORAGE_KEY, JSON.stringify(newLogs));
+      saveGameLogs(newLogs).catch(() => {});
       return { logs: newLogs };
     });
   },
 
   clearLogs: () => {
-    localStorage.removeItem(LOG_STORAGE_KEY);
+    clearGameLogs().catch(() => {});
     set({ logs: [] });
   },
 
@@ -62,6 +51,13 @@ export const useLogStore = create<LogState>((set, get) => ({
     return get().logs.filter((log) => log.category === category);
   },
 }));
+
+// 启动时从 IndexedDB 加载日志
+loadGameLogs()
+  .then((logs) => {
+    useLogStore.setState({ logs });
+  })
+  .catch(() => {});
 
 // 便捷函数：不依赖 React 组件即可记录日志
 export const logApiCall = (

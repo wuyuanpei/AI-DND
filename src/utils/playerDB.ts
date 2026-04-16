@@ -1,14 +1,18 @@
 const DB_NAME = 'ai-dnd-player';
-const DB_VERSION = 1;
-const STORE_NAME = 'playerData';
+const DB_VERSION = 2;
+const PLAYER_STORE = 'playerData';
+const LOGS_STORE = 'gameLogs';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+      if (!db.objectStoreNames.contains(PLAYER_STORE)) {
+        db.createObjectStore(PLAYER_STORE);
+      }
+      if (!db.objectStoreNames.contains(LOGS_STORE)) {
+        db.createObjectStore(LOGS_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -38,8 +42,8 @@ backstory: "${text.backstory ?? ''}"
 export async function savePlayerJson(text: PlayerJson): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(text, 'playerJson');
+    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    tx.objectStore(PLAYER_STORE).put(text, 'playerJson');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -48,8 +52,8 @@ export async function savePlayerJson(text: PlayerJson): Promise<void> {
 export async function loadPlayerJson(): Promise<PlayerJson | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).get('playerJson');
+    const tx = db.transaction(PLAYER_STORE, 'readonly');
+    const request = tx.objectStore(PLAYER_STORE).get('playerJson');
     request.onsuccess = () => resolve(request.result ?? null);
     request.onerror = () => reject(request.error);
   });
@@ -58,8 +62,8 @@ export async function loadPlayerJson(): Promise<PlayerJson | null> {
 export async function saveAvatar(blob: Blob): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(blob, 'avatar');
+    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    tx.objectStore(PLAYER_STORE).put(blob, 'avatar');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -68,8 +72,8 @@ export async function saveAvatar(blob: Blob): Promise<void> {
 export async function loadAvatar(): Promise<string | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).get('avatar');
+    const tx = db.transaction(PLAYER_STORE, 'readonly');
+    const request = tx.objectStore(PLAYER_STORE).get('avatar');
     request.onsuccess = () => {
       const blob: Blob | undefined = request.result;
       if (!blob) {
@@ -88,8 +92,51 @@ export async function loadAvatar(): Promise<string | null> {
 export async function clearPlayerData(): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).clear();
+    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    tx.objectStore(PLAYER_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Game logs
+export interface GameLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error';
+  category: 'api' | 'system' | 'ui' | 'combat' | 'world' | 'memory';
+  message: string;
+  details?: string;
+}
+
+export async function saveGameLogs(logs: GameLog[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(LOGS_STORE, 'readwrite');
+    tx.objectStore(LOGS_STORE).put(logs, 'logs');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadGameLogs(): Promise<GameLog[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(LOGS_STORE, 'readonly');
+    const request = tx.objectStore(LOGS_STORE).get('logs');
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : []);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function clearGameLogs(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(LOGS_STORE, 'readwrite');
+    tx.objectStore(LOGS_STORE).delete('logs');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
