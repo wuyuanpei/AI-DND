@@ -3,13 +3,32 @@ import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
-import { savePlayerJson, saveAvatar } from '../../utils/playerDB';
+import { savePlayerJson, saveAvatar, saveDMPhase } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
+
+const getBasePromptForDM = (phase: DMPhase): string => {
+  switch (phase) {
+    case 'creation': return DM_CHARACTER_CREATION_PROMPT;
+    case 'shop': return DM_SHOP_PROMPT;
+    case 'adventure': return DM_BASE_PROMPT;
+    default: return DM_BASE_PROMPT;
+  }
+};
+
+const getSystemPromptForDM = (phase: DMPhase): string => {
+  const base = getBasePromptForDM(phase);
+  if (phase === 'creation') {
+    return base;
+  }
+  return buildSystemPrompt(base);
+};
 
 const writePlayerJsonToDB = (name: string, gender: string, appearance: string, personality: string, backstory: string) => {
   void savePlayerJson({ name, gender, appearance, personality, backstory }).catch((e) => logError('保存玩家文本到 IndexedDB 失败', e instanceof Error ? e.message : String(e)));
 };
-import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT } from '../../config/dmConfig';
+import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT } from '../../config/dmConfig';
+import { buildSystemPrompt } from '../../utils/dmPrompt';
+import type { DMPhase } from '../../store/dialogueStore';
 import { chatWithNPC } from '../../services/qwen';
 import { generateCharacterPortrait } from '../../services/imageGen';
 import { buildPortraitPrompt } from '../../config/imageConfig';
@@ -37,7 +56,6 @@ const Dialogue: React.FC = () => {
   } = store;
 
   const { addApiUsage } = useSettingsStore();
-  const playerIsCreated = usePlayerStore((state) => state.isCreated);
   const createCharacter = usePlayerStore((state) => state.createCharacter);
   const [userInput, setUserInput] = useState('');
   const [npcOptions, setNpcOptions] = useState<Record<string, string[]>>({});
@@ -63,10 +81,10 @@ const Dialogue: React.FC = () => {
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!isOpen) {
-      const prompt = playerIsCreated ? DM_BASE_PROMPT : DM_CHARACTER_CREATION_PROMPT;
+      const prompt = getSystemPromptForDM(store.dmPhase);
       openLLMDialogue(DM_NPC_ID, 'DM', prompt);
     }
-  }, [isOpen, openLLMDialogue, playerIsCreated]);
+  }, [isOpen, openLLMDialogue, store.dmPhase]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -81,10 +99,10 @@ const Dialogue: React.FC = () => {
       !isLoading &&
       messages.filter((m) => m.role !== 'system').length === 0
     ) {
-      const systemPrompt = playerIsCreated ? DM_BASE_PROMPT : DM_CHARACTER_CREATION_PROMPT;
+      const systemPrompt = getSystemPromptForDM(store.dmPhase);
       sendToLLM(DM_NPC_ID, 'DM', systemPrompt, '（玩家刚刚进入游戏，请主动向玩家打招呼并开启对话。）', false);
     }
-  }, [isOpen, activeTabId, isLoading, messages, playerIsCreated]);
+  }, [isOpen, activeTabId, isLoading, messages, store.dmPhase]);
 
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
@@ -95,22 +113,6 @@ const Dialogue: React.FC = () => {
     writePlayerJsonToDB(character.name, character.gender ?? '', character.appearance ?? '', character.personality ?? '', character.backstory ?? '');
     savePlayerStatsToStorage();
     logMemory('写入玩家记忆卡片', `IndexedDB: playerJson, name: ${character.name}`);
-
-    const dState = useDialogueStore.getState();
-    const dmMessages = dState.npcMessages[DM_NPC_ID] || [];
-    if (dmMessages.length > 0 && dmMessages[0].role === 'system') {
-      const newDmMessages = [
-        { role: 'system' as const, content: DM_BASE_PROMPT },
-        ...dmMessages.slice(1),
-      ];
-      useDialogueStore.setState({
-        npcMessages: {
-          ...dState.npcMessages,
-          [DM_NPC_ID]: newDmMessages,
-        },
-        ...(dState.activeTabId === DM_NPC_ID ? { messages: newDmMessages } : {}),
-      });
-    }
   };
 
   // 更新玩家头像
@@ -133,6 +135,22 @@ const Dialogue: React.FC = () => {
 
     setPendingCharacter(null);
     setGeneratingAvatars(false);
+
+    // 进入商店阶段，清空历史并主动打招呼
+    useDialogueStore.setState({ dmPhase: 'shop' });
+    void saveDMPhase('shop').catch(() => {});
+    const dState = useDialogueStore.getState();
+    useDialogueStore.setState({
+      npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
+      messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
+    });
+    await sendToLLM(
+      DM_NPC_ID,
+      'DM',
+      getSystemPromptForDM('shop'),
+      '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
+      false
+    );
   };
 
   // 跳过头像选择
@@ -143,6 +161,22 @@ const Dialogue: React.FC = () => {
     const state = usePlayerStore.getState();
     writePlayerJsonToDB(state.name, state.gender ?? '', state.appearance ?? '', state.personality ?? '', state.backstory ?? '');
     savePlayerStatsToStorage();
+
+    // 进入商店阶段，清空历史并主动打招呼
+    useDialogueStore.setState({ dmPhase: 'shop' });
+    void saveDMPhase('shop').catch(() => {});
+    const dState = useDialogueStore.getState();
+    useDialogueStore.setState({
+      npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
+      messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
+    });
+    await sendToLLM(
+      DM_NPC_ID,
+      'DM',
+      getSystemPromptForDM('shop'),
+      '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
+      false
+    );
   };
 
   // 核心 LLM 发送逻辑
@@ -209,6 +243,29 @@ const Dialogue: React.FC = () => {
             delete next[targetNpcId];
             return next;
           });
+        }
+
+        // 商店阶段 → 冒险阶段
+        const dmPhase = useDialogueStore.getState().dmPhase;
+        if (dmPhase === 'shop' && result.startAdventure) {
+          addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+
+          useDialogueStore.setState({ dmPhase: 'adventure' });
+          void saveDMPhase('adventure').catch(() => {});
+          const dState = useDialogueStore.getState();
+          useDialogueStore.setState({
+            npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
+            messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
+          });
+
+          await sendToLLM(
+            DM_NPC_ID,
+            'DM',
+            getSystemPromptForDM('adventure'),
+            '（玩家已完成购物准备开始冒险，请主动向玩家打招呼并开启新的冒险旅程。）',
+            false
+          );
+          return;
         }
 
         if (!currentPlayerIsCreated && result.character) {
@@ -290,14 +347,12 @@ const Dialogue: React.FC = () => {
 
     const currentNpcId = store.npcId;
     const currentNpcName = store.npcName;
-    const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
 
-    const systemPrompt =
+    const basePrompt =
       currentNpcId === DM_NPC_ID
-        ? currentPlayerIsCreated
-          ? DM_BASE_PROMPT
-          : DM_CHARACTER_CREATION_PROMPT
+        ? getBasePromptForDM(store.dmPhase)
         : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
+    const systemPrompt = currentNpcId === DM_NPC_ID ? getSystemPromptForDM(store.dmPhase) : basePrompt;
 
     await sendToLLM(currentNpcId, currentNpcName, systemPrompt, userInput.trim(), true);
     setUserInput('');
@@ -307,14 +362,12 @@ const Dialogue: React.FC = () => {
   const handleOptionClick = async (text: string) => {
     const currentNpcId = store.npcId;
     const currentNpcName = store.npcName;
-    const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
 
-    const systemPrompt =
+    const basePrompt =
       currentNpcId === DM_NPC_ID
-        ? currentPlayerIsCreated
-          ? DM_BASE_PROMPT
-          : DM_CHARACTER_CREATION_PROMPT
+        ? getBasePromptForDM(store.dmPhase)
         : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
+    const systemPrompt = currentNpcId === DM_NPC_ID ? getSystemPromptForDM(store.dmPhase) : basePrompt;
 
     // 清除当前选项，防止重复点击
     setNpcOptions((prev) => {

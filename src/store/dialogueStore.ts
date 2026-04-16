@@ -11,6 +11,8 @@ export interface DialogueTab {
   npcName: string;
 }
 
+export type DMPhase = 'creation' | 'shop' | 'adventure';
+
 interface DialogueState {
   isOpen: boolean;
   mode: 'scripted' | 'llm';
@@ -28,6 +30,8 @@ interface DialogueState {
   // 当前选中的标签
   activeTabId: string;
   isLoading: boolean;
+  // DM 当前阶段
+  dmPhase: DMPhase;
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
@@ -37,6 +41,7 @@ interface DialogueState {
   addMessage: (message: DialogueMessage) => void;
   setLoading: (loading: boolean) => void;
   resetDialogue: () => void;
+  setDMPhase: (phase: DMPhase) => void;
   // 切换标签
   switchTab: (npcId: string) => void;
   // 关闭标签
@@ -66,6 +71,7 @@ const initialDialogueState = {
   ],
   activeTabId: DM_NPC_ID,
   isLoading: false,
+  dmPhase: 'creation' as const,
 };
 
 export const useDialogueStore = create<DialogueState>((set, get) => ({
@@ -316,5 +322,6 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
     }
   })),
 
+  setDMPhase: (phase) => set({ dmPhase: phase }),
   resetDialogue: () => set(initialDialogueState),
 }));

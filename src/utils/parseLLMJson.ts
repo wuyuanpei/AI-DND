@@ -3,6 +3,7 @@ export interface ParseLLMJsonResult {
   dialogue?: string;
   options?: string[];
   character?: unknown;
+  startAdventure?: boolean;
   error?: string;
 }
 
@@ -256,6 +257,7 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
       dialogue: dialogueValue,
       options: parseOptions(parsed.options),
       character: parsed.character,
+      startAdventure: parsed.startAdventure === true,
     };
   } catch {
     // ignore, try repair
@@ -274,6 +276,7 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
       dialogue: dialogueValue,
       options: parseOptions(parsed.options),
       character: parsed.character,
+      startAdventure: parsed.startAdventure === true,
     };
   } catch (e) {
     // Fallback: extract fields with regex, or use raw string as dialogue

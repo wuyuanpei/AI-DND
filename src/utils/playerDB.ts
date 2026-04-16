@@ -99,6 +99,26 @@ export async function clearPlayerData(): Promise<void> {
   });
 }
 
+export async function saveDMPhase(phase: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    tx.objectStore(PLAYER_STORE).put(phase, 'dmPhase');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadDMPhase(): Promise<string | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PLAYER_STORE, 'readonly');
+    const request = tx.objectStore(PLAYER_STORE).get('dmPhase');
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 // Game logs
 export interface GameLog {
   id: string;

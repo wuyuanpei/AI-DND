@@ -138,7 +138,7 @@ const GameLogs: React.FC = () => {
                         {copiedId === log.id ? '已复制' : '复制'}
                       </button>
                       {log.details && (
-                        <span className="text-gray-500">{expandedId === log.id ? '▼' : '▶'}</span>
+                        <span className="text-gray-500">{expandedId === log.id ? '▼' : '►'}</span>
                       )}
                     </div>
                     {log.details && expandedId === log.id && (

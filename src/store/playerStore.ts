@@ -30,7 +30,7 @@ export interface CharacterData {
   avatar?: string;
 }
 
-interface PlayerState {
+export interface PlayerState {
   isCreated: boolean;
   name: string;
   level: number;
