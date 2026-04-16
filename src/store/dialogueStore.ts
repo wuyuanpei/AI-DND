@@ -36,6 +36,7 @@ interface DialogueState {
   selectChoice: (choiceIndex: number) => void;
   addMessage: (message: DialogueMessage) => void;
   setLoading: (loading: boolean) => void;
+  resetDialogue: () => void;
   // 切换标签
   switchTab: (npcId: string) => void;
   // 关闭标签
@@ -44,17 +45,17 @@ interface DialogueState {
   getVisibleTabs: () => DialogueTab[];
 }
 
-export const useDialogueStore = create<DialogueState>((set, get) => ({
+const initialDialogueState = {
   isOpen: false,
-  mode: 'scripted',
+  mode: 'scripted' as const,
   npcId: '',
   npcName: 'DM',
   currentNodeId: null,
-  nodes: [],
-  messages: [],
+  nodes: [] as DialogueNode[],
+  messages: [] as DialogueMessage[],
   npcMessages: {
     [DM_NPC_ID]: [
-      { role: 'system', content: DM_BASE_PROMPT }
+      { role: 'system' as const, content: DM_BASE_PROMPT }
     ]
   },
   npcLoading: {
@@ -65,6 +66,10 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
   ],
   activeTabId: DM_NPC_ID,
   isLoading: false,
+};
+
+export const useDialogueStore = create<DialogueState>((set, get) => ({
+  ...initialDialogueState,
 
   // 获取可见标签
   getVisibleTabs: () => {
@@ -193,7 +198,18 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
     const existingMessages = state.npcMessages[npcId];
 
     if (existingMessages) {
-      // 使用已存在的对话历史
+      // 使用已存在的对话历史，但如果传入了新的 systemPrompt，更新第一条 system 消息
+      let messagesToUse = existingMessages;
+      if (
+        systemPrompt &&
+        existingMessages[0]?.role === 'system' &&
+        existingMessages[0].content !== systemPrompt
+      ) {
+        messagesToUse = [
+          { role: 'system' as const, content: systemPrompt },
+          ...existingMessages.slice(1)
+        ];
+      }
       return set({
         isOpen: true,
         mode: 'llm',
@@ -201,7 +217,7 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
         npcName,
         currentNodeId: null,
         nodes: [],
-        messages: existingMessages,
+        messages: messagesToUse,
         activeTabId: npcId
       });
     }
@@ -299,4 +315,6 @@ export const useDialogueStore = create<DialogueState>((set, get) => ({
       [state.npcId]: loading
     }
   })),
+
+  resetDialogue: () => set(initialDialogueState),
 }));

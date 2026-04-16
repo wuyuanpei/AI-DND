@@ -19,7 +19,21 @@ export const getSkillCap = (level: number): number => {
   return Math.min(cap, BASE_SKILL_SLOTS + (MAX_LEVEL - 1)); // 最多 12 个
 };
 
+export interface CharacterData {
+  name: string;
+  strength: number;
+  agility: number;
+  intelligence: number;
+  charisma: number;
+  gender?: string;
+  appearance?: string;
+  personality?: string;
+  backstory?: string;
+  avatar?: string;
+}
+
 interface PlayerState {
+  isCreated: boolean;
   name: string;
   level: number;
   hp: number;
@@ -36,9 +50,18 @@ interface PlayerState {
   agility: number; // 敏捷
   intelligence: number; // 智力
   charisma: number; // 魅力
+  // 角色设定
+  gender?: string;
+  appearance?: string;
+  personality?: string;
+  backstory?: string;
+  // 头像
+  avatar?: string;
 
   // Actions
   setName: (name: string) => void;
+  createCharacter: (character: CharacterData) => void;
+  resetPlayer: () => void;
   takeDamage: (amount: number) => void;
   heal: (amount: number) => void;
   addGold: (amount: number) => void;
@@ -48,7 +71,8 @@ interface PlayerState {
   getCurrentWeight: () => number;
 }
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
+const initialPlayerState = {
+  isCreated: false,
   name: '冒险者',
   level: 1,
   hp: 100,
@@ -64,8 +88,41 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   agility: 10,
   intelligence: 10,
   charisma: 10,
+  gender: undefined,
+  appearance: undefined,
+  personality: undefined,
+  backstory: undefined,
+  avatar: undefined,
+};
+
+export const usePlayerStore = create<PlayerState>((set, get) => ({
+  ...initialPlayerState,
 
   setName: (name) => set({ name }),
+  createCharacter: (character) => set({
+    isCreated: true,
+    name: character.name,
+    strength: character.strength,
+    agility: character.agility,
+    intelligence: character.intelligence,
+    charisma: character.charisma,
+    gender: character.gender,
+    appearance: character.appearance,
+    personality: character.personality,
+    backstory: character.backstory,
+    avatar: character.avatar,
+    hp: 100,
+    maxHp: 100,
+    mp: 50,
+    maxMp: 50,
+    level: 1,
+    exp: 0,
+    gold: 0,
+    equipment: {},
+    inventory: {},
+    skills: [],
+  }),
+  resetPlayer: () => set(initialPlayerState),
   takeDamage: (amount) => set((state) => ({
     hp: Math.max(0, state.hp - amount)
   })),

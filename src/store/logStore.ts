@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type LogLevel = 'info' | 'warn' | 'error';
-export type GameLogCategory = 'api' | 'system' | 'ui' | 'combat' | 'world';
+export type GameLogCategory = 'api' | 'system' | 'ui' | 'combat' | 'world' | 'memory';
 
 export interface GameLog {
   id: string;
@@ -107,6 +107,15 @@ export const logError = (message: string, details?: string) => {
   useLogStore.getState().addLog({
     level: 'error',
     category: 'system',
+    message,
+    details,
+  });
+};
+
+export const logMemory = (message: string, details?: string) => {
+  useLogStore.getState().addLog({
+    level: 'info',
+    category: 'memory',
     message,
     details,
   });

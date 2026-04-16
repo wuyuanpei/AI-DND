@@ -1,6 +1,8 @@
 export interface ParseLLMJsonResult {
   parsed?: Record<string, unknown>;
   dialogue?: string;
+  options?: string[];
+  character?: unknown;
   error?: string;
 }
 
@@ -14,6 +16,56 @@ function stripMarkdownCodeBlocks(content: string): string {
 
 function repairTrailingCommas(str: string): string {
   return str.replace(/,(\s*[}\]])/g, '$1');
+}
+
+function repairUnescapedQuotes(str: string): string {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+
+    if (escaped) {
+      result += '\\' + char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      result += char;
+      continue;
+    }
+
+    if (char === '"' && !escaped) {
+      if (!inString) {
+        inString = true;
+        result += char;
+        continue;
+      }
+
+      // We're inside a string and found a quote. Check if it looks like the real closing quote.
+      // Heuristic: skip whitespace after the quote, then check if the next char is , } ] or end of string.
+      // If yes, it's likely the closing quote. Otherwise, it's an unescaped quote inside the string.
+      let j = i + 1;
+      while (j < str.length && /[\s]/.test(str[j])) j++;
+      const nextChar = str[j];
+      const isClosing = nextChar === ',' || nextChar === '}' || nextChar === ']' || j >= str.length;
+
+      if (isClosing) {
+        inString = false;
+        result += char;
+      } else {
+        result += '\\"';
+      }
+      continue;
+    }
+
+    result += char;
+  }
+
+  return result;
 }
 
 function repairUnescapedNewlines(str: string): string {
@@ -102,15 +154,108 @@ function extractOptionalStringField(content: string, field: string): string | un
   return undefined;
 }
 
+function extractStringArrayField(content: string, field: string): string[] | undefined {
+  const regex = new RegExp(`"${field}"\\s*:\\s*\\[`, 'g');
+  const match = regex.exec(content);
+  if (!match) return undefined;
+
+  let i = match.index + match[0].length;
+  const items: string[] = [];
+  let current = '';
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+
+  while (i < content.length) {
+    const char = content[i];
+
+    if (char === ']' && !inString && depth === 0) {
+      if (current.trim()) {
+        const trimmed = current.trim();
+        if (trimmed) items.push(trimmed);
+      }
+      break;
+    }
+
+    if (char === '{' && !inString) {
+      depth++;
+      current += char;
+      i++;
+      continue;
+    }
+
+    if (char === '}' && !inString) {
+      depth--;
+      current += char;
+      i++;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      i++;
+      continue;
+    }
+
+    if (escaped) {
+      if (char === '"') {
+        current += '"';
+      } else if (char === 'n') {
+        current += '\\n';
+      } else {
+        current += '\\' + char;
+      }
+      escaped = false;
+      i++;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      if (!inString) {
+        // end of string
+        items.push(current);
+        current = '';
+        // skip following comma or whitespace
+        let j = i + 1;
+        while (j < content.length && /[\s,]/.test(content[j])) j++;
+        i = j;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+    if (inString) {
+      current += char;
+    }
+
+    i++;
+  }
+
+  return items.length > 0 ? items : undefined;
+}
+
+function parseOptions(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const result = value.filter((v): v is string => typeof v === 'string');
+    return result.length > 0 ? result : undefined;
+  }
+  return undefined;
+}
+
 export function parseLLMJson(content: string): ParseLLMJsonResult {
   const str = stripMarkdownCodeBlocks(content);
 
   // First attempt: direct parse
   try {
     const parsed = JSON.parse(str) as Record<string, unknown>;
+    const dialogueValue = typeof parsed.dialogue === 'string' ? parsed.dialogue : typeof parsed.dialog === 'string' ? parsed.dialog : undefined;
     return {
       parsed,
-      dialogue: typeof parsed.dialogue === 'string' ? parsed.dialogue : undefined,
+      dialogue: dialogueValue,
+      options: parseOptions(parsed.options),
+      character: parsed.character,
     };
   } catch {
     // ignore, try repair
@@ -119,20 +264,25 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
   // Second attempt: repair common LLM errors
   let repaired = repairTrailingCommas(str);
   repaired = repairUnescapedNewlines(repaired);
+  repaired = repairUnescapedQuotes(repaired);
 
   try {
     const parsed = JSON.parse(repaired) as Record<string, unknown>;
+    const dialogueValue = typeof parsed.dialogue === 'string' ? parsed.dialogue : typeof parsed.dialog === 'string' ? parsed.dialog : undefined;
     return {
       parsed,
-      dialogue: typeof parsed.dialogue === 'string' ? parsed.dialogue : undefined,
+      dialogue: dialogueValue,
+      options: parseOptions(parsed.options),
+      character: parsed.character,
     };
   } catch (e) {
-    // Fallback: extract fields with regex
-    const dialogue = extractOptionalStringField(str, 'dialogue');
+    // Fallback: extract fields with regex, or use raw string as dialogue
+    const dialogue = extractOptionalStringField(str, 'dialogue') ?? extractOptionalStringField(str, 'dialog') ?? str.trim();
+    const options = extractStringArrayField(str, 'options');
 
     return {
       dialogue,
-      error: `JSON parse failed after repair: ${e instanceof Error ? e.message : String(e)}`,
+      options,
     };
   }
 }

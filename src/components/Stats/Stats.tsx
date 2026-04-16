@@ -2,7 +2,7 @@ import React from 'react';
 import { usePlayerStore } from '../../store/playerStore';
 
 const Stats: React.FC = () => {
-  const { name, level, hp, maxHp, mp, maxMp, exp, gold, strength, agility, intelligence, charisma } = usePlayerStore();
+  const { name, level, hp, maxHp, mp, maxMp, exp, gold, strength, agility, intelligence, charisma, avatar } = usePlayerStore();
 
   const hpPercent = (hp / maxHp) * 100;
   const mpPercent = (mp / maxMp) * 100;
@@ -19,8 +19,11 @@ const Stats: React.FC = () => {
       {/* 头像占位 - 3:4 比例，与栏目标齐宽 (180px : 240px = 4:3) */}
       <div className="flex-shrink-0 flex justify-center mb-1 mt-1">
         <div className="w-[180px] h-[240px] bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center overflow-hidden">
-          {/* 暂时用 emoji 占位，之后可以替换为 img 标签 */}
-          <span className="text-6xl">🧙</span>
+          {avatar ? (
+            <img src={avatar} alt="角色头像" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-6xl">🧙</span>
+          )}
         </div>
       </div>
 

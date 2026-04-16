@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { logError } from '../../store/logStore';
-import { DM_BASE_PROMPT } from '../../config/dmConfig';
+import { usePlayerStore } from '../../store/playerStore';
+import { logError, logMemory } from '../../store/logStore';
+import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT } from '../../config/dmConfig';
 import { chatWithNPC } from '../../services/qwen';
+import { generateCharacterPortrait, buildPortraitPrompt } from '../../services/imageGen';
 import type { ChatMessage } from '../../services/qwen';
 import type { DialogueMessage } from '../../types';
+import type { CharacterData } from '../../store/playerStore';
 import { parseLLMJson } from '../../utils/parseLLMJson';
 
 const Dialogue: React.FC = () => {
@@ -27,72 +30,149 @@ const Dialogue: React.FC = () => {
   } = store;
 
   const { addApiUsage } = useSettingsStore();
+  const playerIsCreated = usePlayerStore((state) => state.isCreated);
+  const createCharacter = usePlayerStore((state) => state.createCharacter);
   const [userInput, setUserInput] = useState('');
+  const [npcOptions, setNpcOptions] = useState<Record<string, string[]>>({});
+  const [pendingCharacter, setPendingCharacter] = useState<CharacterData | null>(null);
+  const [generatingAvatars, setGeneratingAvatars] = useState(false);
+  const [avatarOptions, setAvatarOptions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = getVisibleTabs();
   const activeTabId = store.activeTabId;
   const isDM = activeTabId === DM_NPC_ID;
 
+  // 渲染 **粗体**
+  const renderBoldText = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!isOpen) {
-      openLLMDialogue(DM_NPC_ID, 'DM', DM_BASE_PROMPT);
+      const prompt = playerIsCreated ? DM_BASE_PROMPT : DM_CHARACTER_CREATION_PROMPT;
+      openLLMDialogue(DM_NPC_ID, 'DM', prompt);
     }
-  }, []);
+  }, [isOpen, openLLMDialogue, playerIsCreated]);
 
   // 自动滚动到最新消息
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // DM 自动发起首轮对话（角色创建问候或游戏开场）
+  useEffect(() => {
+    if (
+      isOpen &&
+      activeTabId === DM_NPC_ID &&
+      !isLoading &&
+      messages.filter((m) => m.role !== 'system').length === 0
+    ) {
+      const systemPrompt = playerIsCreated ? DM_BASE_PROMPT : DM_CHARACTER_CREATION_PROMPT;
+      sendToLLM(DM_NPC_ID, 'DM', systemPrompt, '（玩家刚刚进入游戏，请主动向玩家打招呼并开启对话。）', false);
+    }
+  }, [isOpen, activeTabId, isLoading, messages, playerIsCreated]);
+
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
 
-  // 处理 LLM 对话输入
-  const handleLLMSubmit = async () => {
+  // 最终创建角色并保存
+  const finalizeCharacterCreation = (character: CharacterData, avatarUrl?: string) => {
+    const finalCharacter = { ...character, avatar: avatarUrl };
+    createCharacter(finalCharacter);
+    const md = `---
+name: "${finalCharacter.name}"
+level: 1
+gender: "${finalCharacter.gender ?? ''}"
+appearance: "${finalCharacter.appearance ?? ''}"
+personality: "${finalCharacter.personality ?? ''}"
+backstory: "${finalCharacter.backstory ?? ''}"
+strength: ${finalCharacter.strength}
+agility: ${finalCharacter.agility}
+intelligence: ${finalCharacter.intelligence}
+charisma: ${finalCharacter.charisma}
+avatar: "${finalCharacter.avatar ?? ''}"
+---
+`;
+    localStorage.setItem('ai-dnd-player-md', md);
+    if (avatarUrl) {
+      localStorage.setItem('ai-dnd-player-avatar', avatarUrl);
+    }
+    logMemory('写入玩家记忆卡片', `key: ai-dnd-player-md, name: ${finalCharacter.name}`);
+
+    const dState = useDialogueStore.getState();
+    const dmMessages = dState.npcMessages[DM_NPC_ID] || [];
+    if (dmMessages.length > 0 && dmMessages[0].role === 'system') {
+      const newDmMessages = [
+        { role: 'system' as const, content: DM_BASE_PROMPT },
+        ...dmMessages.slice(1),
+      ];
+      useDialogueStore.setState({
+        npcMessages: {
+          ...dState.npcMessages,
+          [DM_NPC_ID]: newDmMessages,
+        },
+        ...(dState.activeTabId === DM_NPC_ID ? { messages: newDmMessages } : {}),
+      });
+    }
+    setPendingCharacter(null);
+    setAvatarOptions([]);
+    setGeneratingAvatars(false);
+  };
+
+  // 核心 LLM 发送逻辑
+  const sendToLLM = async (
+    targetNpcId: string,
+    targetNpcName: string,
+    systemPrompt: string,
+    userMessage: string,
+    showUserMessage: boolean
+  ) => {
     const apiKey = useSettingsStore.getState().getCurrentApiKey();
     const model = useSettingsStore.getState().getCurrentModel();
     const apiUrl = useSettingsStore.getState().getCurrentApiUrl();
-    if (!userInput.trim() || !apiKey) return;
+    if (!apiKey) return;
 
-    // 保存当前的 npcId 和 npcName，防止切换 tab 时变化
-    const currentNpcId = store.npcId;
-    const currentNpcName = store.npcName;
+    const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
 
-    // 获取历史对话（排除 system 消息）
-    const historyMessages: DialogueMessage[] = store.messages.filter(m => m.role !== 'system');
+    // 获取当前 messages（用于构建 history）
+    const state = useDialogueStore.getState();
+    const currentMessages = state.npcMessages[targetNpcId] || [];
+    const historyMessages: DialogueMessage[] = currentMessages.filter((m) => m.role !== 'system');
 
-    // 构建系统提示词
-    const systemPrompt = currentNpcId === DM_NPC_ID
-      ? DM_BASE_PROMPT
-      : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
-
-    setLoading(true);
-    addMessage({ role: 'user', content: userInput });
-    setUserInput('');
+    if (showUserMessage) {
+      setLoading(true);
+      addMessage({ role: 'user', content: userMessage });
+    } else {
+      setLoadingForNpc(targetNpcId, true);
+    }
 
     try {
-      // 将 DialogueMessage 转换为 ChatMessage 格式（npc 角色转为 assistant）
-      const history: ChatMessage[] = historyMessages.map(m => ({
+      const history: ChatMessage[] = historyMessages.map((m) => ({
         role: m.role === 'npc' ? 'assistant' : m.role,
-        content: m.content
+        content: m.content,
       }));
 
       const response = await chatWithNPC(
-        currentNpcId === DM_NPC_ID ? 'DM' : currentNpcName,
+        targetNpcId === DM_NPC_ID ? 'DM' : targetNpcName,
         systemPrompt,
         history,
-        userInput,
+        userMessage,
         apiKey,
         model,
         apiUrl
       );
-      // 更新 API 统计
       addApiUsage(response.usage);
       let replyContent = response.content;
-      // 如果是 DM，尝试解析 JSON 响应，提取 dialogue 字段
-      if (currentNpcId === DM_NPC_ID) {
+
+      if (targetNpcId === DM_NPC_ID) {
         const result = parseLLMJson(response.content);
         if (result.dialogue) {
           replyContent = result.dialogue.trim();
@@ -101,15 +181,128 @@ const Dialogue: React.FC = () => {
         } else {
           logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
         }
+
+        // 提取 options
+        if (result.options) {
+          setNpcOptions((prev) => ({ ...prev, [targetNpcId]: result.options! }));
+        } else {
+          setNpcOptions((prev) => {
+            const next = { ...prev };
+            delete next[targetNpcId];
+            return next;
+          });
+        }
+
+        if (!currentPlayerIsCreated && result.character) {
+          const char = result.character as Record<string, unknown>;
+          if (
+            typeof char.name === 'string' &&
+            typeof char.strength === 'number' &&
+            typeof char.agility === 'number' &&
+            typeof char.intelligence === 'number' &&
+            typeof char.charisma === 'number'
+          ) {
+            const characterData: CharacterData = {
+              name: char.name,
+              strength: char.strength,
+              agility: char.agility,
+              intelligence: char.intelligence,
+              charisma: char.charisma,
+              gender: typeof char.gender === 'string' ? char.gender : undefined,
+              appearance: typeof char.appearance === 'string' ? char.appearance : undefined,
+              personality: typeof char.personality === 'string' ? char.personality : undefined,
+              backstory: typeof char.backstory === 'string' ? char.backstory : undefined,
+            };
+
+            // 代码层校验：四维属性之和必须为 50
+            const attrSum = characterData.strength + characterData.agility + characterData.intelligence + characterData.charisma;
+            if (attrSum !== 50) {
+              addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+              await sendToLLM(
+                targetNpcId,
+                targetNpcName,
+                systemPrompt,
+                `(系统提示：当前角色四维属性之和为${attrSum}，不等于50。请提示玩家修改属性分配，使力量、敏捷、智力、魅力之和恰好为50，每项仍须在8-16之间，然后重新给出角色预览等待玩家确认。)`,
+                false
+              );
+              return;
+            }
+
+            // 属性校验通过，进入头像生成流程
+            addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+            setPendingCharacter(characterData);
+            setGeneratingAvatars(true);
+            setAvatarOptions([]);
+
+            const { imageApiKey, imageModel, imageApiUrl } = useSettingsStore.getState();
+            if (imageApiKey) {
+              try {
+                const prompt = buildPortraitPrompt(characterData);
+                const res = await generateCharacterPortrait(prompt, imageApiKey, imageModel, imageApiUrl, 3);
+                setAvatarOptions(res.urls);
+              } catch (e) {
+                logError('头像生成失败', e instanceof Error ? e.message : String(e));
+                finalizeCharacterCreation(characterData);
+              } finally {
+                setGeneratingAvatars(false);
+              }
+            } else {
+              // 未配置图片 API，跳过头像生成
+              finalizeCharacterCreation(characterData);
+            }
+            return;
+          }
+        }
       }
-      // 使用保存的 npcId 添加回复，确保添加到正确的 tab
-      addMessageToNpc(currentNpcId, { role: 'assistant', content: replyContent });
+
+      addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
     } catch (error) {
-      addMessageToNpc(currentNpcId, { role: 'assistant', content: '（对话出错...）' });
+      addMessageToNpc(targetNpcId, { role: 'assistant', content: '（对话出错...）' });
     } finally {
-      // 使用保存的 npcId 设置加载状态，确保更新正确的 tab
-      setLoadingForNpc(currentNpcId, false);
+      setLoadingForNpc(targetNpcId, false);
     }
+  };
+
+  // 处理 LLM 对话输入
+  const handleLLMSubmit = async () => {
+    if (!userInput.trim()) return;
+
+    const currentNpcId = store.npcId;
+    const currentNpcName = store.npcName;
+    const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
+
+    const systemPrompt =
+      currentNpcId === DM_NPC_ID
+        ? currentPlayerIsCreated
+          ? DM_BASE_PROMPT
+          : DM_CHARACTER_CREATION_PROMPT
+        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
+
+    await sendToLLM(currentNpcId, currentNpcName, systemPrompt, userInput.trim(), true);
+    setUserInput('');
+  };
+
+  // 处理选项点击
+  const handleOptionClick = async (text: string) => {
+    const currentNpcId = store.npcId;
+    const currentNpcName = store.npcName;
+    const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
+
+    const systemPrompt =
+      currentNpcId === DM_NPC_ID
+        ? currentPlayerIsCreated
+          ? DM_BASE_PROMPT
+          : DM_CHARACTER_CREATION_PROMPT
+        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
+
+    // 清除当前选项，防止重复点击
+    setNpcOptions((prev) => {
+      const next = { ...prev };
+      delete next[currentNpcId];
+      return next;
+    });
+
+    await sendToLLM(currentNpcId, currentNpcName, systemPrompt, text, true);
   };
 
   // 添加到指定 NPC 的消息
@@ -214,7 +407,7 @@ const Dialogue: React.FC = () => {
                     marginRight: msg.role === 'user' ? '0' : '100px',
                   }}
                 >
-                  {msg.content}
+                  {renderBoldText(msg.content)}
                 </div>
               ))}
             {isLoading && (
@@ -244,23 +437,89 @@ const Dialogue: React.FC = () => {
 
         {/* LLM 模式：输入框 */}
         {mode === 'llm' && (
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="flex-1 bg-gray-600 text-white text-sm p-2 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
-              placeholder="输入消息..."
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
-              disabled={isLoading}
-            />
-            <button
-              className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
-              onClick={handleLLMSubmit}
-              disabled={isLoading || !userInput.trim()}
-            >
-              发送
-            </button>
+          <div className="space-y-2">
+            {/* 头像生成中提示 */}
+            {pendingCharacter && generatingAvatars && (
+              <div className="text-gray-300 text-sm text-center py-2">
+                正在根据角色设定生成头像，请稍候...
+              </div>
+            )}
+
+            {/* 头像选择 */}
+            {pendingCharacter && !generatingAvatars && avatarOptions.length > 0 && (
+              <div className="bg-gray-700 rounded p-3 space-y-2">
+                <div className="text-white text-sm font-bold text-center">请选择一张作为角色头像</div>
+                <div className="flex justify-center gap-3">
+                  {avatarOptions.map((url, idx) => (
+                    <div key={idx} className="flex flex-col items-center gap-1">
+                      <img
+                        src={url}
+                        alt={`头像候选 ${idx + 1}`}
+                        className="rounded border border-gray-500 object-cover"
+                        style={{ width: '180px', height: '240px' }}
+                      />
+                      <button
+                        className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded"
+                        onClick={() => finalizeCharacterCreation(pendingCharacter, url)}
+                      >
+                        选为头像
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="w-full text-gray-400 hover:text-white text-xs py-1"
+                  onClick={() => finalizeCharacterCreation(pendingCharacter)}
+                >
+                  跳过，不使用头像
+                </button>
+              </div>
+            )}
+
+            {/* 普通选项按钮 */}
+            {!pendingCharacter && !isLoading && !generatingAvatars && (
+              <div className="flex flex-wrap gap-2">
+                {(npcOptions[activeTabId] || []).filter((opt) => !opt.includes('自定义')).length > 0 ? (
+                  npcOptions[activeTabId]
+                    .filter((opt) => !opt.includes('自定义'))
+                    .map((opt, idx) => (
+                      <button
+                        key={idx}
+                        className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1.5 rounded border border-gray-500"
+                        onClick={() => handleOptionClick(opt)}
+                      >
+                        {opt}
+                      </button>
+                    ))
+                ) : (
+                  <button
+                    className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1.5 rounded border border-gray-500"
+                    onClick={() => handleOptionClick('请给我一些选项')}
+                  >
+                    请给我一些选项
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 bg-gray-600 text-white text-sm p-2 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
+                placeholder="输入消息..."
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
+                disabled={isLoading || generatingAvatars || (pendingCharacter !== null && avatarOptions.length > 0)}
+              />
+              <button
+                className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
+                onClick={handleLLMSubmit}
+                disabled={isLoading || !userInput.trim() || generatingAvatars || (pendingCharacter !== null && avatarOptions.length > 0)}
+              >
+                发送
+              </button>
+            </div>
           </div>
         )}
       </div>

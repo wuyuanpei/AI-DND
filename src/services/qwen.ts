@@ -36,7 +36,7 @@ export async function chatWithNPC(
 
   const config = {
     model,
-    temperature: 0.3,
+    temperature: 1.0,
     enable_thinking: false
   };
 
@@ -98,7 +98,7 @@ export async function chatWithContext(
 ): Promise<string> {
   const config = {
     model,
-    temperature: 0.3,
+    temperature: 1.0,
     enable_thinking: false
   };
 

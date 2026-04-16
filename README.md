@@ -79,7 +79,7 @@ npm run preview
 | DeepSeek | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
 
 **API 配置：**
-- temperature: 0.3
+- temperature: 1.0
 - enable_thinking: false
 
 **返回格式：**
@@ -144,7 +144,7 @@ export const WEIGHT_LIMIT = 50;         // 背包重量上限
 
 ```typescript
 // 可在 chatWithNPC 函数中调整：
-// - temperature: 0.3  (创造力，0-2；越低越确定)
+// - temperature: 1.0  (创造力，0-2；越低越确定)
 // - enable_thinking: false  (是否启用推理过程)
 ```
 
@@ -256,7 +256,6 @@ DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含
 - 核心规则：判定玩家对话是否与游戏相关，无关则拒绝回答
 
 ### API 参数调整
-- `temperature` 从 `0.7` 降至 `0.3`，回复更确定
 - 移除 `max_tokens` 限制，不再硬截断输出长度
 - 系统提示词去掉所有“不超过 X 字”约束
 

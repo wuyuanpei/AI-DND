@@ -8,6 +8,10 @@ const PROVIDER_STORAGE_KEY = 'ai-dnd-provider';
 const QWEN_MODEL_STORAGE_KEY = 'ai-dnd-qwen-model';
 const DEEPSEEK_MODEL_STORAGE_KEY = 'ai-dnd-deepseek-model';
 
+const IMAGE_API_KEY_STORAGE_KEY = 'ai-dnd-image-api-key';
+const IMAGE_MODEL_STORAGE_KEY = 'ai-dnd-image-model';
+const IMAGE_API_URL_STORAGE_KEY = 'ai-dnd-image-api-url';
+
 export type Provider = 'qwen' | 'deepseek';
 
 // 从 localStorage 读取配置
@@ -37,6 +41,30 @@ const getStoredModel = (provider: Provider): string => {
   }
 };
 
+const getStoredImageApiKey = (): string | null => {
+  try {
+    return localStorage.getItem(IMAGE_API_KEY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const getStoredImageModel = (): string => {
+  try {
+    return localStorage.getItem(IMAGE_MODEL_STORAGE_KEY) || 'wanx2.1-t2i-plus';
+  } catch {
+    return 'wanx2.1-t2i-plus';
+  }
+};
+
+const getStoredImageApiUrl = (): string => {
+  try {
+    return localStorage.getItem(IMAGE_API_URL_STORAGE_KEY) || 'https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations';
+  } catch {
+    return 'https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations';
+  }
+};
+
 const PROVIDER_API_URLS: Record<Provider, string> = {
   qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
   deepseek: 'https://api.deepseek.com/v1/chat/completions',
@@ -52,10 +80,15 @@ interface SettingsState {
   totalPromptTokens: number;
   totalCompletionTokens: number;
   totalTokens: number;
+  // 图片生成配置
+  imageApiKey: string | null;
+  imageModel: string;
+  imageApiUrl: string;
 
   setProvider: (provider: Provider) => void;
   setApiKey: (provider: Provider, key: string | null) => void;
   setModel: (provider: Provider, model: string) => void;
+  setImageConfig: (config: { apiKey?: string; model?: string; apiUrl?: string }) => void;
   addApiUsage: (usage: TokenUsage) => void;
   resetStats: () => void;
   // 获取当前 provider 的配置
@@ -74,6 +107,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   totalPromptTokens: 0,
   totalCompletionTokens: 0,
   totalTokens: 0,
+  imageApiKey: getStoredImageApiKey(),
+  imageModel: getStoredImageModel(),
+  imageApiUrl: getStoredImageApiUrl(),
 
   setProvider: (provider) => {
     localStorage.setItem(PROVIDER_STORAGE_KEY, provider);
@@ -96,6 +132,27 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const oldModel = provider === 'qwen' ? state.qwenModel : state.deepseekModel;
     set(provider === 'qwen' ? { qwenModel: model } : { deepseekModel: model });
     logSystem(`模型切换 (${provider}): ${oldModel || '无'} → ${model}`);
+  },
+  setImageConfig: (config) => {
+    const updates: Partial<SettingsState> = {};
+    if (config.apiKey !== undefined) {
+      if (config.apiKey) {
+        localStorage.setItem(IMAGE_API_KEY_STORAGE_KEY, config.apiKey);
+      } else {
+        localStorage.removeItem(IMAGE_API_KEY_STORAGE_KEY);
+      }
+      updates.imageApiKey = config.apiKey || null;
+    }
+    if (config.model !== undefined) {
+      localStorage.setItem(IMAGE_MODEL_STORAGE_KEY, config.model);
+      updates.imageModel = config.model;
+    }
+    if (config.apiUrl !== undefined) {
+      localStorage.setItem(IMAGE_API_URL_STORAGE_KEY, config.apiUrl);
+      updates.imageApiUrl = config.apiUrl;
+    }
+    set(updates);
+    logSystem('图片模型配置更新', JSON.stringify(updates));
   },
   addApiUsage: (usage) => {
     set((state) => ({

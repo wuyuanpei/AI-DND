@@ -13,11 +13,18 @@ const DEEPSEEK_MODELS = [
 ];
 
 const Settings: React.FC = () => {
-  const { provider, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel, setProvider, setApiKey, setModel } = useSettingsStore();
+  const {
+    provider, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel,
+    imageApiKey, imageModel, imageApiUrl,
+    setProvider, setApiKey, setModel, setImageConfig
+  } = useSettingsStore();
   const [inputQwenKey, setInputQwenKey] = useState(qwenApiKey || '');
   const [inputDeepseekKey, setInputDeepseekKey] = useState(deepseekApiKey || '');
   const [selectedQwenModel, setSelectedQwenModel] = useState(qwenModel);
   const [selectedDeepseekModel, setSelectedDeepseekModel] = useState(deepseekModel);
+  const [inputImageKey, setInputImageKey] = useState(imageApiKey || '');
+  const [inputImageModel, setInputImageModel] = useState(imageModel);
+  const [inputImageUrl, setInputImageUrl] = useState(imageApiUrl);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -25,7 +32,10 @@ const Settings: React.FC = () => {
     setInputDeepseekKey(deepseekApiKey || '');
     setSelectedQwenModel(qwenModel);
     setSelectedDeepseekModel(deepseekModel);
-  }, [isOpen, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel]);
+    setInputImageKey(imageApiKey || '');
+    setInputImageModel(imageModel);
+    setInputImageUrl(imageApiUrl);
+  }, [isOpen, qwenApiKey, deepseekApiKey, qwenModel, deepseekModel, imageApiKey, imageModel, imageApiUrl]);
 
   const handleSave = () => {
     setApiKey('qwen', inputQwenKey);
@@ -36,6 +46,11 @@ const Settings: React.FC = () => {
     if (selectedDeepseekModel !== deepseekModel) {
       setModel('deepseek', selectedDeepseekModel);
     }
+    setImageConfig({
+      apiKey: inputImageKey,
+      model: inputImageModel,
+      apiUrl: inputImageUrl,
+    });
     setIsOpen(false);
   };
 
@@ -168,6 +183,52 @@ const Settings: React.FC = () => {
                 </div>
               </>
             )}
+
+            <div className="border-t border-gray-600 my-4 pt-4">
+              <div className="text-white font-bold text-sm mb-3">图片生成配置（角色头像）</div>
+
+              <div className="mb-4">
+                <label className="text-gray-400 text-sm block mb-2">
+                  图片生成 API Key
+                </label>
+                <input
+                  type="password"
+                  className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
+                  placeholder="输入图片生成 API Key..."
+                  value={inputImageKey}
+                  onChange={(e) => setInputImageKey(e.target.value)}
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  默认使用 DashScope（百炼）图片生成 API
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-gray-400 text-sm block mb-2">
+                  图片模型
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
+                  placeholder="例如 wanx2.1-t2i-plus"
+                  value={inputImageModel}
+                  onChange={(e) => setInputImageModel(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="text-gray-400 text-sm block mb-2">
+                  图片 API 地址
+                </label>
+                <input
+                  type="text"
+                  className="w-full bg-gray-700 text-white text-sm p-3 rounded border border-gray-500 focus:border-blue-400 outline-none"
+                  placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations"
+                  value={inputImageUrl}
+                  onChange={(e) => setInputImageUrl(e.target.value)}
+                />
+              </div>
+            </div>
 
             <div className="flex gap-2 justify-end">
               <button

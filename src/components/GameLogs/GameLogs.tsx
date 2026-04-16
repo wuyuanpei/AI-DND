@@ -9,6 +9,7 @@ const CATEGORIES: { value: GameLogCategory | 'all'; label: string }[] = [
   { value: 'ui', label: 'UI' },
   { value: 'combat', label: '战斗' },
   { value: 'world', label: '世界' },
+  { value: 'memory', label: '记忆' },
 ];
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
@@ -23,6 +24,7 @@ const CATEGORY_COLORS: Record<GameLogCategory, string> = {
   ui: 'bg-purple-900 text-purple-300',
   combat: 'bg-red-900 text-red-300',
   world: 'bg-green-900 text-green-300',
+  memory: 'bg-yellow-900 text-yellow-300',
 };
 
 const GameLogs: React.FC = () => {
