@@ -1,10 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
+import { useDialogueStore, getDMName, type DMPhase } from '../../store/dialogueStore';
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
 import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
+import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT } from '../../config/dmConfig';
+import { buildSystemPrompt } from '../../utils/dmPrompt';
+import { chatWithNPC } from '../../services/qwen';
+import { generateCharacterPortrait } from '../../services/imageGen';
+import { buildPortraitPrompt } from '../../config/imageConfig';
+import type { ChatMessage } from '../../services/qwen';
+import type { DialogueMessage } from '../../types';
+import type { CharacterData } from '../../store/playerStore';
+import { parseLLMJson } from '../../utils/parseLLMJson';
 
 const getBasePromptForDM = (phase: DMPhase): string => {
   switch (phase) {
@@ -30,16 +39,8 @@ const dmPhaseToHistoryKey = (phase: DMPhase): string => {
 const writePlayerJsonToDB = (name: string, gender: string, appearance: string, personality: string, backstory: string) => {
   void savePlayerJson({ name, gender, appearance, personality, backstory }).catch((e) => logError('保存玩家文本到 IndexedDB 失败', e instanceof Error ? e.message : String(e)));
 };
-import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT } from '../../config/dmConfig';
-import { buildSystemPrompt } from '../../utils/dmPrompt';
-import type { DMPhase } from '../../store/dialogueStore';
-import { chatWithNPC } from '../../services/qwen';
-import { generateCharacterPortrait } from '../../services/imageGen';
-import { buildPortraitPrompt } from '../../config/imageConfig';
-import type { ChatMessage } from '../../services/qwen';
-import type { DialogueMessage } from '../../types';
-import type { CharacterData } from '../../store/playerStore';
-import { parseLLMJson } from '../../utils/parseLLMJson';
+
+const DM_NPC_ID = '__dm__';
 
 const Dialogue: React.FC = () => {
   const store = useDialogueStore();
@@ -53,24 +54,19 @@ const Dialogue: React.FC = () => {
     selectChoice,
     addMessage,
     setLoading,
-    switchTab,
-    hideTab,
-    getVisibleTabs,
     openLLMDialogue,
   } = store;
 
   const { addApiUsage } = useSettingsStore();
   const createCharacter = usePlayerStore((state) => state.createCharacter);
   const [userInput, setUserInput] = useState('');
-  const [npcOptions, setNpcOptions] = useState<Record<string, string[]>>({});
+  const [options, setOptions] = useState<string[]>([]);
   const [pendingCharacter, setPendingCharacter] = useState<CharacterData | null>(null);
   const [generatingAvatars, setGeneratingAvatars] = useState(false);
   const [restored, setRestored] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const visibleTabs = getVisibleTabs();
-  const activeTabId = store.activeTabId;
-  const isDM = activeTabId === DM_NPC_ID;
+  const dmName = getDMName(store.dmPhase);
 
   // 渲染 **粗体**
   const renderBoldText = (text: string) => {
@@ -93,11 +89,7 @@ const Dialogue: React.FC = () => {
 
       useDialogueStore.setState({ dmPhase: phase });
       if (history && history.length > 0) {
-        const dState = useDialogueStore.getState();
-        useDialogueStore.setState({
-          npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: history },
-          messages: dState.activeTabId === DM_NPC_ID ? history : dState.messages,
-        });
+        useDialogueStore.setState({ messages: history });
       }
       setRestored(true);
     })();
@@ -107,8 +99,8 @@ const Dialogue: React.FC = () => {
   useEffect(() => {
     if (!restored || isOpen) return;
     const prompt = getSystemPromptForDM(store.dmPhase);
-    openLLMDialogue(DM_NPC_ID, 'DM', prompt);
-  }, [restored, isOpen, openLLMDialogue, store.dmPhase]);
+    openLLMDialogue(DM_NPC_ID, dmName, prompt);
+  }, [restored, isOpen, openLLMDialogue, store.dmPhase, dmName]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -120,22 +112,21 @@ const Dialogue: React.FC = () => {
     if (!restored) return;
     if (
       isOpen &&
-      activeTabId === DM_NPC_ID &&
       !isLoading &&
       messages.filter((m) => m.role !== 'system').length === 0
     ) {
       const systemPrompt = getSystemPromptForDM(store.dmPhase);
-      sendToLLM(DM_NPC_ID, 'DM', systemPrompt, '（玩家刚刚进入游戏，请主动向玩家打招呼并开启对话。）', false);
+      sendToLLM(systemPrompt, '（玩家刚刚进入游戏，请主动向玩家打招呼并开启对话。）', false);
     }
-  }, [restored, isOpen, activeTabId, isLoading, messages, store.dmPhase]);
+  }, [restored, isOpen, isLoading, messages, store.dmPhase]);
 
   // 每当 DM 对话内容变化时，持久化当前阶段的对话历史（只保存可见的 assistant/user 消息）
   useEffect(() => {
-    if (!restored || activeTabId !== DM_NPC_ID) return;
+    if (!restored) return;
     const key = dmPhaseToHistoryKey(store.dmPhase);
     const visibleMessages = messages.filter((m) => m.role !== 'system');
     void saveDialogueHistory(key, visibleMessages).catch(() => {});
-  }, [restored, activeTabId, store.dmPhase, messages]);
+  }, [restored, store.dmPhase, messages]);
 
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
@@ -170,16 +161,9 @@ const Dialogue: React.FC = () => {
     setGeneratingAvatars(false);
 
     // 进入商店阶段，清空历史并主动打招呼
-    useDialogueStore.setState({ dmPhase: 'shop' });
+    useDialogueStore.setState({ dmPhase: 'shop', messages: [] });
     void saveDMPhase('shop').catch(() => {});
-    const dState = useDialogueStore.getState();
-    useDialogueStore.setState({
-      npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
-      messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
-    });
     await sendToLLM(
-      DM_NPC_ID,
-      'DM',
       getSystemPromptForDM('shop'),
       '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
       false
@@ -196,16 +180,9 @@ const Dialogue: React.FC = () => {
     savePlayerStatsToStorage();
 
     // 进入商店阶段，清空历史并主动打招呼
-    useDialogueStore.setState({ dmPhase: 'shop' });
+    useDialogueStore.setState({ dmPhase: 'shop', messages: [] });
     void saveDMPhase('shop').catch(() => {});
-    const dState = useDialogueStore.getState();
-    useDialogueStore.setState({
-      npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
-      messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
-    });
     await sendToLLM(
-      DM_NPC_ID,
-      'DM',
       getSystemPromptForDM('shop'),
       '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
       false
@@ -214,8 +191,6 @@ const Dialogue: React.FC = () => {
 
   // 核心 LLM 发送逻辑
   const sendToLLM = async (
-    targetNpcId: string,
-    targetNpcName: string,
     systemPrompt: string,
     userMessage: string,
     showUserMessage: boolean
@@ -228,15 +203,13 @@ const Dialogue: React.FC = () => {
     const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
 
     // 获取当前 messages（用于构建 history）
-    const state = useDialogueStore.getState();
-    const currentMessages = state.npcMessages[targetNpcId] || [];
-    const historyMessages: DialogueMessage[] = currentMessages.filter((m) => m.role !== 'system');
+    const historyMessages: DialogueMessage[] = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
 
     if (showUserMessage) {
       setLoading(true);
       addMessage({ role: 'user', content: userMessage });
     } else {
-      setLoadingForNpc(targetNpcId, true);
+      setLoading(true);
     }
 
     try {
@@ -246,7 +219,7 @@ const Dialogue: React.FC = () => {
       }));
 
       const response = await chatWithNPC(
-        targetNpcId === DM_NPC_ID ? 'DM' : targetNpcName,
+        'DM',
         systemPrompt,
         history,
         userMessage,
@@ -257,195 +230,122 @@ const Dialogue: React.FC = () => {
       addApiUsage(response.usage);
       let replyContent = response.content;
 
-      if (targetNpcId === DM_NPC_ID) {
-        const result = parseLLMJson(response.content);
-        if (result.dialogue) {
-          replyContent = result.dialogue.trim();
-        } else if (result.error) {
-          logError('DM JSON 响应解析失败', `${result.error}; 原始内容: ${response.content.slice(0, 500)}`);
-        } else {
-          logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
-        }
+      const result = parseLLMJson(response.content);
+      if (result.dialogue) {
+        replyContent = result.dialogue.trim();
+      } else if (result.error) {
+        logError('DM JSON 响应解析失败', `${result.error}; 原始内容: ${response.content.slice(0, 500)}`);
+      } else {
+        logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
+      }
 
-        // 提取 options
-        if (result.options) {
-          setNpcOptions((prev) => ({ ...prev, [targetNpcId]: result.options! }));
-        } else {
-          setNpcOptions((prev) => {
-            const next = { ...prev };
-            delete next[targetNpcId];
-            return next;
-          });
-        }
+      // 提取 options
+      if (result.options) {
+        setOptions(result.options);
+      } else {
+        setOptions([]);
+      }
 
-        // 商店阶段 → 冒险阶段
-        const dmPhase = useDialogueStore.getState().dmPhase;
-        if (dmPhase === 'shop' && result.startAdventure) {
-          addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+      // 商店阶段 → 冒险阶段
+      const dmPhase = useDialogueStore.getState().dmPhase;
+      if (dmPhase === 'shop' && result.startAdventure) {
+        addMessage({ role: 'assistant', content: replyContent });
 
-          useDialogueStore.setState({ dmPhase: 'adventure' });
-          void saveDMPhase('adventure').catch(() => {});
-          const dState = useDialogueStore.getState();
-          useDialogueStore.setState({
-            npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: [] },
-            messages: dState.activeTabId === DM_NPC_ID ? [] : dState.messages,
-          });
+        useDialogueStore.setState({ dmPhase: 'adventure', messages: [] });
+        void saveDMPhase('adventure').catch(() => {});
 
-          await sendToLLM(
-            DM_NPC_ID,
-            'DM',
-            getSystemPromptForDM('adventure'),
-            '（玩家已完成购物准备开始冒险，请主动向玩家打招呼并开启新的冒险旅程。）',
-            false
-          );
-          return;
-        }
+        await sendToLLM(
+          getSystemPromptForDM('adventure'),
+          '（玩家已完成购物准备开始冒险，请主动向玩家打招呼并开启新的冒险旅程。）',
+          false
+        );
+        return;
+      }
 
-        if (!currentPlayerIsCreated && result.character) {
-          const char = result.character as Record<string, unknown>;
-          if (
-            typeof char.name === 'string' &&
-            typeof char.strength === 'number' &&
-            typeof char.agility === 'number' &&
-            typeof char.intelligence === 'number' &&
-            typeof char.charisma === 'number'
-          ) {
-            const characterData: CharacterData = {
-              name: char.name,
-              strength: char.strength,
-              agility: char.agility,
-              intelligence: char.intelligence,
-              charisma: char.charisma,
-              gender: typeof char.gender === 'string' ? char.gender : undefined,
-              appearance: typeof char.appearance === 'string' ? char.appearance : undefined,
-              personality: typeof char.personality === 'string' ? char.personality : undefined,
-              backstory: typeof char.backstory === 'string' ? char.backstory : undefined,
-            };
+      if (!currentPlayerIsCreated && result.character) {
+        const char = result.character as Record<string, unknown>;
+        if (
+          typeof char.name === 'string' &&
+          typeof char.strength === 'number' &&
+          typeof char.agility === 'number' &&
+          typeof char.intelligence === 'number' &&
+          typeof char.charisma === 'number'
+        ) {
+          const characterData: CharacterData = {
+            name: char.name,
+            strength: char.strength,
+            agility: char.agility,
+            intelligence: char.intelligence,
+            charisma: char.charisma,
+            gender: typeof char.gender === 'string' ? char.gender : undefined,
+            appearance: typeof char.appearance === 'string' ? char.appearance : undefined,
+            personality: typeof char.personality === 'string' ? char.personality : undefined,
+            backstory: typeof char.backstory === 'string' ? char.backstory : undefined,
+          };
 
-            // 代码层校验：四维属性之和必须为 50
-            const attrSum = characterData.strength + characterData.agility + characterData.intelligence + characterData.charisma;
-            if (attrSum !== 50) {
-              addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
-              await sendToLLM(
-                targetNpcId,
-                targetNpcName,
-                systemPrompt,
-                `(系统提示：当前角色四维属性之和为${attrSum}，不等于50。请提示玩家修改属性分配，使力量、敏捷、智力、魅力之和恰好为50，每项仍须在8-16之间，然后重新给出角色预览等待玩家确认。)`,
-                false
-              );
-              return;
-            }
-
-            // 属性校验通过，先创建角色并写入记忆，再进入头像生成流程
-            addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
-            writePlayerMemoryAndCreateCharacter(characterData);
-
-            setPendingCharacter(characterData);
-            setGeneratingAvatars(true);
-
-            const { imageApiKey, imageModel } = useSettingsStore.getState();
-            if (imageApiKey) {
-              try {
-                const prompt = buildPortraitPrompt(characterData);
-                const res = await generateCharacterPortrait(prompt, imageApiKey, imageModel, IMAGE_API_URL, 1);
-                if (res.urls[0]) {
-                  await updatePlayerAvatar(res.urls[0]);
-                } else {
-                  clearAvatarSelection();
-                }
-              } catch (e) {
-                logError('头像生成失败', e instanceof Error ? e.message : String(e));
-                clearAvatarSelection();
-              }
-            } else {
-              // 未配置图片 API，跳过头像生成
-              clearAvatarSelection();
-            }
+          // 代码层校验：四维属性之和必须为 50
+          const attrSum = characterData.strength + characterData.agility + characterData.intelligence + characterData.charisma;
+          if (attrSum !== 50) {
+            addMessage({ role: 'assistant', content: replyContent });
+            await sendToLLM(
+              systemPrompt,
+              `(系统提示：当前角色四维属性之和为${attrSum}，不等于50。请提示玩家修改属性分配，使力量、敏捷、智力、魅力之和恰好为50，每项仍须在8-16之间，然后重新给出角色预览等待玩家确认。)`,
+              false
+            );
             return;
           }
+
+          // 属性校验通过，先创建角色并写入记忆，再进入头像生成流程
+          addMessage({ role: 'assistant', content: replyContent });
+          writePlayerMemoryAndCreateCharacter(characterData);
+
+          setPendingCharacter(characterData);
+          setGeneratingAvatars(true);
+
+          const { imageApiKey, imageModel } = useSettingsStore.getState();
+          if (imageApiKey) {
+            try {
+              const prompt = buildPortraitPrompt(characterData);
+              const res = await generateCharacterPortrait(prompt, imageApiKey, imageModel, IMAGE_API_URL, 1);
+              if (res.urls[0]) {
+                await updatePlayerAvatar(res.urls[0]);
+              } else {
+                clearAvatarSelection();
+              }
+            } catch (e) {
+              logError('头像生成失败', e instanceof Error ? e.message : String(e));
+              clearAvatarSelection();
+            }
+          } else {
+            // 未配置图片 API，跳过头像生成
+            clearAvatarSelection();
+          }
+          return;
         }
       }
 
-      addMessageToNpc(targetNpcId, { role: 'assistant', content: replyContent });
+      addMessage({ role: 'assistant', content: replyContent });
     } catch (error) {
-      addMessageToNpc(targetNpcId, { role: 'assistant', content: '（对话出错...）' });
+      addMessage({ role: 'assistant', content: '（对话出错...）' });
     } finally {
-      setLoadingForNpc(targetNpcId, false);
+      setLoading(false);
     }
   };
 
   // 处理 LLM 对话输入
   const handleLLMSubmit = async () => {
     if (!userInput.trim()) return;
-
-    const currentNpcId = store.npcId;
-    const currentNpcName = store.npcName;
-
-    const basePrompt =
-      currentNpcId === DM_NPC_ID
-        ? getBasePromptForDM(store.dmPhase)
-        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
-    const systemPrompt = currentNpcId === DM_NPC_ID ? getSystemPromptForDM(store.dmPhase) : basePrompt;
-
-    await sendToLLM(currentNpcId, currentNpcName, systemPrompt, userInput.trim(), true);
+    const systemPrompt = getSystemPromptForDM(store.dmPhase);
+    await sendToLLM(systemPrompt, userInput.trim(), true);
     setUserInput('');
   };
 
   // 处理选项点击
   const handleOptionClick = async (text: string) => {
-    const currentNpcId = store.npcId;
-    const currentNpcName = store.npcName;
-
-    const basePrompt =
-      currentNpcId === DM_NPC_ID
-        ? getBasePromptForDM(store.dmPhase)
-        : `你是 DND 游戏中的${currentNpcName}。请用中世纪奇幻风格与玩家对话。`;
-    const systemPrompt = currentNpcId === DM_NPC_ID ? getSystemPromptForDM(store.dmPhase) : basePrompt;
-
+    const systemPrompt = getSystemPromptForDM(store.dmPhase);
     // 清除当前选项，防止重复点击
-    setNpcOptions((prev) => {
-      const next = { ...prev };
-      delete next[currentNpcId];
-      return next;
-    });
-
-    await sendToLLM(currentNpcId, currentNpcName, systemPrompt, text, true);
-  };
-
-  // 添加到指定 NPC 的消息
-  const addMessageToNpc = (npcId: string, message: DialogueMessage) => {
-    const state = useDialogueStore.getState();
-    const currentMessages = state.npcMessages[npcId] || [];
-    const newMessages = [...currentMessages, message];
-    const updatedNpcMessages = {
-      ...state.npcMessages,
-      [npcId]: newMessages
-    };
-    useDialogueStore.setState({
-      npcMessages: updatedNpcMessages,
-      // 如果当前正在查看这个 NPC，也更新 messages
-      ...(state.activeTabId === npcId ? { messages: newMessages } : {})
-    });
-  };
-
-  // 设置指定 NPC 的加载状态
-  const setLoadingForNpc = (npcId: string, loading: boolean) => {
-    const state = useDialogueStore.getState();
-    const updatedNpcLoading = {
-      ...state.npcLoading,
-      [npcId]: loading
-    };
-    useDialogueStore.setState({
-      isLoading: state.activeTabId === npcId ? loading : state.isLoading,
-      npcLoading: updatedNpcLoading
-    });
-  };
-
-  // 关闭 NPC 标签，返回 DM
-  const handleCloseNPCTab = () => {
-    // 只切换回 DM，不关闭 tab
-    switchTab(DM_NPC_ID);
-    setUserInput('');
+    setOptions([]);
+    await sendToLLM(systemPrompt, text, true);
   };
 
   if (!isOpen) {
@@ -454,34 +354,12 @@ const Dialogue: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden min-w-0" style={{ minWidth: 0 }}>
-      {/* Tab 导航栏 */}
-      <div className="flex-shrink-0 border-b border-gray-600 pb-1">
-        <div className="flex items-center gap-1 overflow-x-hidden">
-          {/* 可见标签 */}
-          {visibleTabs.map(tab => (
-            <div
-              key={tab.npcId}
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer ${
-                activeTabId === tab.npcId
-                  ? 'bg-yellow-600 text-white'
-                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-              }`}
-              onClick={() => switchTab(tab.npcId)}
-            >
-              <span>{tab.npcName}</span>
-              {tab.npcId !== DM_NPC_ID && (
-                <button
-                  className="text-gray-400 hover:text-white text-[10px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    hideTab(tab.npcId);
-                  }}
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
+      {/* DM 名称栏 */}
+      <div className="flex-shrink-0 border-b border-gray-600 pb-1 mb-1">
+        <div className="flex items-center">
+          <span className="px-2 py-1 rounded text-xs bg-yellow-600 text-white">
+            {dmName}
+          </span>
         </div>
       </div>
 
@@ -555,8 +433,8 @@ const Dialogue: React.FC = () => {
             {/* 普通选项按钮 */}
             {!pendingCharacter && !isLoading && !generatingAvatars && (
               <div className="flex flex-wrap gap-2">
-                {(npcOptions[activeTabId] || []).filter((opt) => !opt.includes('自定义')).length > 0 ? (
-                  npcOptions[activeTabId]
+                {options.filter((opt) => !opt.includes('自定义')).length > 0 ? (
+                  options
                     .filter((opt) => !opt.includes('自定义'))
                     .map((opt, idx) => (
                       <button
@@ -599,16 +477,6 @@ const Dialogue: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* 关闭按钮 - 仅 NPC 标签显示 */}
-      {!isDM && (
-        <button
-          className="mt-2 text-gray-400 hover:text-white text-xs flex-shrink-0"
-          onClick={handleCloseNPCTab}
-        >
-          [返回 DM]
-        </button>
-      )}
     </div>
   );
 };
