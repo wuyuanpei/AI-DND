@@ -1,14 +1,129 @@
 # AI-DND
 
-一个基于 React + TypeScript + Vite 的 DND 风格角色扮演游戏。支持 DeepSeek 与通义千问 API 实现与 NPC 的智能对话。
+一个由大语言模型（LLM）全程驱动的 D&D 风格桌面角色扮演游戏。玩家通过与 AI 地下城主（DM）对话来创建角色、购买装备、推进剧情。所有游戏逻辑围绕 LLM 交互构建，DM 不仅扮演叙事者，还负责角色创建引导、商店交易和冒险剧情推进。
+
+## 核心架构
+
+### 1. 三阶段 DM 交互引擎
+
+游戏将 DM 对话划分为三个严格隔离的阶段，每个阶段拥有独立的对话历史、系统提示词和持久化存储：
+
+| 阶段 | 系统提示词 | 历史存储 Key | 核心行为 |
+|------|-----------|-------------|---------|
+| **creation** | `DM_CHARACTER_CREATION_PROMPT` | `creation` | 引导玩家创建角色，收集姓名、性别、外貌、性格、背景，分配四维属性（STR/AGI/INT/CHA，总和 50，每项 8-16） |
+| **shop** | `DM_SHOP_PROMPT` | `shopping` | 扮演营地商人，根据玩家金币推荐初始装备。玩家确认后返回 `startAdventure: true` 进入下一阶段 |
+| **adventure** | `DM_BASE_PROMPT` | `adventure` | 推进主线剧情，描述场景、NPC、战斗结果，驱动玩家探索 |
+
+**阶段切换规则：**
+- 角色创建完成后自动进入 `shop` 阶段，并清空 `creation` 历史
+- 商店阶段玩家表达"开始冒险"意愿后进入 `adventure` 阶段，并清空 `shopping` 历史
+- 每阶段历史独立保存在 IndexedDB 中，刷新页面后按当前 `dmPhase` 恢复对应历史
+
+**动态玩家上下文注入：**
+- `shop` 和 `adventure` 阶段每次请求都会向系统提示词注入实时玩家数据（`src/utils/dmPrompt.ts`）
+- 包含：基本信息、HP/MP、金币、四维属性、负重、装备列表、技能列表、背包物品
+
+### 2. LLM 通信协议
+
+DM 与前端通过严格的 **JSON 协议** 通信（`src/utils/parseLLMJson.ts`）。大模型返回的 JSON 被解析后驱动 UI 状态：
+
+```json
+{
+  "dialogue": "DM 对玩家说的话",
+  "options": ["选项一", "选项二"],
+  "character": { /* 仅在 creation 完成时出现 */ },
+  "startAdventure": false /* 仅在 shop 阶段，准备冒险时设为 true */
+}
+```
+
+- `dialogue`：渲染到对话栏的文本内容
+- `options`：转化为对话栏下方的可点击按钮（0-5 个）
+- `character`：触发角色创建，写入 `playerStore`
+- `startAdventure`：触发阶段切换到 `adventure`
+
+历史上下文中仅保留 `dialogue` 文本，不保存完整 JSON 或 `options`。
+
+### 3. 数据持久化（IndexedDB）
+
+所有核心数据存储在浏览器 IndexedDB（`ai-dnd-player`），不使用 localStorage 保存大段文本或对话历史：
+
+| Store | Key | 内容 |
+|-------|-----|------|
+| `playerData` | `playerJson` | 玩家文本信息（姓名、性别、外貌、性格、背景） |
+| `playerData` | `avatar` | 角色头像 Blob |
+| `playerData` | `dmPhase` | 当前 DM 阶段 |
+| `dialogueHistory` | `creation` / `shopping` / `adventure` | 各阶段可见对话历史（不含 system） |
+| `gameLogs` | `logs` | 系统日志 |
+
+localStorage 仅用于保存快速变化的数值状态（`ai-dnd-player-stats`）：等级、HP/MP、经验、金币、四维属性、负重上限等。
+
+### 4. 状态管理（Zustand）
+
+- **`playerStore`**（`src/store/playerStore.ts`）：玩家核心状态。创建角色时按公式计算初始值：`maxHp = 10×STR + 5×AGI`、`maxMp = 10×INT`、`gold = 10×CHA`、`weightLimit = 10×STR`
+- **`dialogueStore`**（`src/store/dialogueStore.ts`）：对话状态、Tab 管理、DM 阶段切换、按 NPC 隔离的对话历史
+- **`settingsStore`**（`src/store/settingsStore.ts`）：API Key、模型选择（通义千问 / DeepSeek）、图片生成配置、API 调用统计
+- **`logStore`**（`src/store/logStore.ts`）：游戏系统日志，持久化到 IndexedDB
+
+### 5. 服务层
+
+- **`src/services/qwen.ts`**：统一 LLM API 封装。支持多服务商切换，构造 `system + history + user` 的消息体发送请求
+- **`src/services/imageGen.ts`**：角色头像生成服务，创建角色完成后自动调用
+
+### 6. 自动头像生成
+
+角色创建流程：
+1. DM 返回 `character` JSON
+2. 前端校验属性之和为 50
+3. 创建角色并持久化
+4. 调用 `generateCharacterPortrait()` 生成 AI 头像
+5. 头像 Blob 存入 IndexedDB，DataURL 存入 playerStore
+6. 自动切换 DM 到 `shop` 阶段
 
 ## 技术栈
 
-- **React 19** - UI 框架
-- **TypeScript 6** - 类型系统
-- **Vite 8** - 构建工具
-- **Zustand 5** - 状态管理
-- **TailwindCSS 4** - 样式
+- **React 19** + **TypeScript 6**
+- **Vite 8**
+- **Zustand 5**（状态管理）
+- **TailwindCSS 4**（样式）
+- **IndexedDB**（大段文本、头像、对话历史、日志持久化）
+
+## 项目结构
+
+```
+src/
+├── components/
+│   ├── Dialogue/           # LLM 对话组件，三阶段切换核心
+│   ├── Equipment/          # 装备栏
+│   ├── Inventory/          # 背包（28 格）
+│   ├── Layout/             # 主布局（GameLayout）
+│   ├── GameLogs/           # 系统日志面板
+│   ├── Memory/             # 玩家记忆卡片面板
+│   ├── Rules/              # 游戏规则面板
+│   ├── Settings/           # API 设置面板
+│   ├── Spells/             # 技能栏
+│   ├── Stats/              # 玩家属性面板
+│   └── WorldPanel/         # 世界状态面板
+├── config/
+│   ├── dmConfig.ts         # DM 三阶段系统提示词
+│   └── imageConfig.ts      # 头像生成提示词配置
+├── services/
+│   ├── qwen.ts             # LLM API 封装
+│   └── imageGen.ts         # 图片生成服务
+├── store/
+│   ├── playerStore.ts      # 玩家状态
+│   ├── dialogueStore.ts    # 对话与 DM 阶段状态
+│   ├── settingsStore.ts    # 设置与 API 统计
+│   ├── logStore.ts         # 游戏日志
+│   └── worldStore.ts       # 世界状态（预留）
+├── utils/
+│   ├── playerDB.ts         # IndexedDB 读写封装
+│   ├── playerStats.ts      # localStorage 数值持久化
+│   ├── dmPrompt.ts         # 动态玩家上下文生成
+│   └── parseLLMJson.ts     # LLM JSON 响应解析与容错
+├── types/
+│   └── index.ts            # 核心类型定义
+└── App.tsx
+```
 
 ## 开发
 
@@ -19,252 +134,27 @@ npm install
 # 启动开发服务器
 npm run dev
 
-# 构建生产版本
+# 构建
 npm run build
-
-# 预览生产构建
-npm run preview
 ```
 
-## 核心系统
+## 配置说明
 
-### 1. 玩家系统 (`src/store/playerStore.ts`)
+API Key 和模型选择仅通过界面右上角的 **设置** 按钮配置，支持：
 
-管理玩家的所有状态和属性。
+- **通义千问**：`qwen3.5-flash`、`qwen3.6-plus` 等
+- **DeepSeek**：`deepseek-chat`
 
-**玩家属性：**
-- `name`: 玩家名称
-- `level`: 等级 (1-10)
-- `hp/maxHp`: 生命值
-- `mp/maxMp`: 魔法值
-- `exp`: 经验值
-- `gold`: 金币
-- `strength`: 力量
-- `agility`: 敏捷
-- `intelligence`: 智力
-- `charisma`: 魅力
-
-**装备系统：**
-- 9 个装备槽：头盔、护甲、盾牌、主武器、副武器、远程、上衣、裤子、鞋子
-
-**背包系统：**
-- 20 个格子，使用数字索引存储物品
-- 重量上限：50
-
-**技能系统：**
-- 初始 3 个技能槽，每级 +1
-- 满级 (10 级) 时 12 个技能槽
-- 公式：`技能上限 = 3 + (等级 - 1)`
-
-### 2. 对话系统 (`src/store/dialogueStore.ts`)
-
-支持两种对话模式：
-- **脚本模式**: 预定义的对话节点和选项
-- **LLM 模式**: 使用 DeepSeek API 进行智能对话
-
-**特性：**
-- 按 NPC 存储对话历史
-- 关闭对话后保留记录
-- 再次对话时恢复历史
-
-### 4. LLM API 对话 (`src/services/qwen.ts`)
-
-统一封装的大模型对话服务，支持多服务商切换。
-
-**支持的模型服务商：**
-
-| 服务商 | API URL | 可用模型 |
-|--------|---------|----------|
-| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` | `qwen3.5-flash`、`qwen3.6-plus`、`qwen3.5-plus`、`qwen3-max` |
-| DeepSeek | `https://api.deepseek.com/v1/chat/completions` | `deepseek-chat` |
-
-**API 配置：**
-- temperature: 1.0
-- enable_thinking: false
-
-**返回格式：**
-```typescript
-interface ChatResponse {
-  content: string;           // AI 回复内容
-  usage: {
-    promptTokens: number;        // 输入 token 数
-    completionTokens: number;    // 输出 token 数
-    totalTokens: number;         // 总 token 数
-  }
-}
-```
-
-**API 统计：**
-- 自动统计调用次数和 token 消耗量
-- 数据持久化到 localStorage
-- 在游戏界面底部实时显示
-
-### 5. 存档系统 (`src/store/saveSystem.ts`)
-
-使用 LocalStorage 保存游戏进度。
-
-**存档内容：**
-- 玩家状态
-- 世界状态
-- 设置（包括 API Key）
-- 存档时间戳
-
-**API Key 持久化：**
-- 千问 API Key：`ai-dnd-qwen-api-key`
-- DeepSeek API Key：`ai-dnd-deepseek-api-key`
-- 当前服务商：`ai-dnd-provider`
-- 当前模型：`ai-dnd-qwen-model` / `ai-dnd-deepseek-model`
-- 重启后仍然存在
-
-### 6. 对话系统特性 (`src/store/dialogueStore.ts`)
-
-**Tab 多对话管理：**
-- 默认 DM 标签页（始终存在，无法关闭）
-- NPC 标签页动态创建，可关闭
-- 每个 NPC 独立的对话历史
-- 切换标签页时保留各自的加载状态
-
-**异步处理：**
-- 请求时保存当前 NPC ID，防止切换导致消息错乱
-- 每个 NPC 独立的 loading 状态
-- "思考中..."与对应标签页绑定
-
-## 可配置选项
-
-### 玩家配置 (`src/store/playerStore.ts`)
-
-```typescript
-export const INVENTORY_SLOTS = 20;      // 背包格子数量
-export const BASE_SKILL_SLOTS = 3;      // 基础技能槽数量
-export const MAX_LEVEL = 10;            // 最大等级
-export const WEIGHT_LIMIT = 50;         // 背包重量上限
-```
-
-### API 配置 (`src/services/qwen.ts`)
-
-```typescript
-// 可在 chatWithNPC 函数中调整：
-// - temperature: 1.0  (创造力，0-2；越低越确定)
-// - enable_thinking: false  (是否启用推理过程)
-```
-
-服务商切换会自动使用对应的 API URL，无需手动修改代码。
-
-### API 统计配置 (`src/store/settingsStore.ts`)
-
-**统计数据持久化：**
-- 存储键：`ai-dnd-api-stats`
-- 包含字段：
-  - `apiCallCount`: API 调用总次数
-  - `totalPromptTokens`: 输入 token 总数
-  - `totalCompletionTokens`: 输出 token 总数
-  - `totalTokens`: token 总消耗量
-
-**重置统计：**
-```typescript
-useSettingsStore.getState().resetStats();  // 清空统计数据
-```
-
-### 游戏规则 (`src/data/rules.json`)
-
-以 JSON 格式存储游戏规则文档，支持多个 Tab：
-- 技能
-- 属性
-- 装备
-- 战斗
-
-## 项目结构
-
-```
-src/
-├── components/
-│   ├── Dialogue/       # 对话组件
-│   ├── Equipment/      # 装备栏
-│   ├── Inventory/      # 背包
-│   ├── Layout/         # 主布局
-│   ├── Rules/         # 规则面板
-│   ├── Settings/      # 设置
-│   ├── Spells/        # 技能栏
-│   ├── Stats/         # 玩家状态
-│   └── WorldPanel/    # 世界状态面板
-├── config/
-│   └── dmConfig.ts    # DM 基础提示词配置
-├── data/
-│   └── rules.json     # 游戏规则文档
-├── services/
-│   └── qwen.ts        # 统一 LLM API 服务
-├── store/
-│   ├── dialogueStore.ts  # 对话状态
-│   ├── playerStore.ts    # 玩家状态
-│   ├── saveSystem.ts     # 存档系统
-│   ├── settingsStore.ts  # 设置状态
-│   └── worldStore.ts     # 世界状态
-├── types/
-│   └── index.ts       # TypeScript 类型定义
-└── main.tsx           # 入口文件
-```
-
-## 扩展指南
-
-### 添加新物品类型
-
-在 `types/index.ts` 中扩展 `Item` 类型：
-
-```typescript
-export interface Item {
-  id: string;
-  name: string;
-  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'consumable' | /* 新类型 */;
-  description: string;
-  stats?: Record<string, number>;
-}
-```
-
-### 自定义 NPC 对话
-
-在 `rules.json` 中添加对话规则，或修改 `src/services/qwen.ts` 中的系统提示词参数。
-
-DM 的基础系统提示词统一管理在 `src/config/dmConfig.ts` 中，包含以下核心规则：
-- **游戏相关性判定**：无关问题会被引导回游戏，不透露 AI 身份
-- **角色与风格**：中世纪奇幻 DM，沉浸式叙述
-- **长度控制**：根据内容需要自然展开，不刻意压缩
-- **剧情推进**：适时主动推动剧情
-- **世界观一致性**：禁止超时代元素
-
-## 最近修改
-
-### Tab 对话系统
-- 添加 DM 永久标签页（游戏主持人，驱动游戏进程）
-- NPC 标签页动态创建，点击 X 关闭
-- 每个 NPC 独立的对话历史和加载状态
-- 异步请求绑定原 NPC ID，防止切换导致消息错乱
-
-### API 统计功能
-- 自动统计 DeepSeek API 调用次数
-- 统计 Prompt/Completion/Total Token 消耗
-- 数据持久化到 localStorage
-- 界面底部实时显示统计信息
-
-### 多服务商支持
-- 支持切换 通义千问 / DeepSeek 两个模型服务商
-- 千问可选模型：`qwen3.5-flash`、`qwen3.6-plus`、`qwen3.5-plus`、`qwen3-max`
-- DeepSeek 可选模型：`deepseek-chat`
-- 每个服务商独立保存 API Key 和模型选择
-
-### DM 提示词配置
-- 新增 `src/config/dmConfig.ts` 管理 DM 基础提示词
-- 核心规则：判定玩家对话是否与游戏相关，无关则拒绝回答
-
-### API 参数调整
-- 移除 `max_tokens` 限制，不再硬截断输出长度
-- 系统提示词去掉所有“不超过 X 字”约束
-
-### 其他优化
-- 修复切换标签页时消息丢失问题
-- 修复思考中状态与标签页绑定
-- 修复关闭 NPC 标签页后未切回 DM 消息的问题
-- 移除隐藏标签页功能，简化交互
+图片生成服务需单独配置图片 API Key。
 
 ## 许可证
 
-MIT
+Apache License 2.0
+
+Copyright (c) 2026 Yuanpei Wu
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
