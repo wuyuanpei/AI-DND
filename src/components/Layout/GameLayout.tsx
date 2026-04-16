@@ -87,7 +87,7 @@ const GameLayout: React.FC = () => {
         </div>
 
         {/* 中间列：对话栏（占据原地图+下排对话区域） */}
-        <div className="w-[1024px] min-w-0 bg-gray-700 rounded-lg p-3 overflow-hidden" style={{ height: '1192px' }}>
+        <div className="w-[1024px] min-w-0 bg-gray-700 rounded-lg p-3 overflow-hidden self-stretch">
           <Dialogue />
         </div>
 
