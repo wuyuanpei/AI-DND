@@ -102,7 +102,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   createCharacter: (character) => {
     const maxHp = 10 * character.strength + 5 * character.agility;
     const maxMp = 10 * character.intelligence;
-    const gold = 10 * character.charisma;
+    const gold = 100 * character.charisma;
     return set({
       isCreated: true,
       name: character.name,
