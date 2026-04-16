@@ -1,7 +1,10 @@
+import type { DialogueMessage } from '../types';
+
 const DB_NAME = 'ai-dnd-player';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const PLAYER_STORE = 'playerData';
 const LOGS_STORE = 'gameLogs';
+const DIALOGUE_STORE = 'dialogueHistory';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -13,6 +16,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(LOGS_STORE)) {
         db.createObjectStore(LOGS_STORE);
+      }
+      if (!db.objectStoreNames.contains(DIALOGUE_STORE)) {
+        db.createObjectStore(DIALOGUE_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -92,8 +98,9 @@ export async function loadAvatar(): Promise<string | null> {
 export async function clearPlayerData(): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(PLAYER_STORE, 'readwrite');
+    const tx = db.transaction([PLAYER_STORE, DIALOGUE_STORE], 'readwrite');
     tx.objectStore(PLAYER_STORE).clear();
+    tx.objectStore(DIALOGUE_STORE).clear();
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -116,6 +123,39 @@ export async function loadDMPhase(): Promise<string | null> {
     const request = tx.objectStore(PLAYER_STORE).get('dmPhase');
     request.onsuccess = () => resolve(request.result ?? null);
     request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveDialogueHistory(key: string, messages: DialogueMessage[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DIALOGUE_STORE, 'readwrite');
+    tx.objectStore(DIALOGUE_STORE).put(messages, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadDialogueHistory(key: string): Promise<DialogueMessage[] | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DIALOGUE_STORE, 'readonly');
+    const request = tx.objectStore(DIALOGUE_STORE).get(key);
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : null);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function clearDialogueHistory(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DIALOGUE_STORE, 'readwrite');
+    tx.objectStore(DIALOGUE_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 

@@ -14,7 +14,7 @@ import { usePlayerStore } from '../../store/playerStore';
 import { useDialogueStore } from '../../store/dialogueStore';
 import { useWorldStore } from '../../store/worldStore';
 import { logMemory } from '../../store/logStore';
-import { loadPlayerJson, loadAvatar, loadDMPhase, clearPlayerData } from '../../utils/playerDB';
+import { loadPlayerJson, loadAvatar, clearPlayerData } from '../../utils/playerDB';
 import { savePlayerStatsToStorage, loadPlayerStatsFromStorage, clearPlayerStats } from '../../utils/playerStats';
 
 const GameLayout: React.FC = () => {
@@ -42,16 +42,6 @@ const GameLayout: React.FC = () => {
       const avatar = await loadAvatar();
       if (avatar) {
         usePlayerStore.setState({ avatar });
-      }
-
-      // 从 IndexedDB 恢复 DM 阶段
-      const savedPhase = await loadDMPhase();
-      const player = usePlayerStore.getState();
-      if (player.isCreated && savedPhase) {
-        useDialogueStore.setState({ dmPhase: savedPhase as 'creation' | 'shop' | 'adventure' });
-      } else if (player.isCreated && !savedPhase) {
-        // 旧存档兼容：没有保存过 dmPhase 的已创建角色，默认进入冒险阶段
-        useDialogueStore.setState({ dmPhase: 'adventure' });
       }
     })();
   }, []);

@@ -3,7 +3,7 @@ import { useDialogueStore, DM_NPC_ID } from '../../store/dialogueStore';
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
-import { savePlayerJson, saveAvatar, saveDMPhase } from '../../utils/playerDB';
+import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
 
 const getBasePromptForDM = (phase: DMPhase): string => {
@@ -21,6 +21,10 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
     return base;
   }
   return buildSystemPrompt(base);
+};
+
+const dmPhaseToHistoryKey = (phase: DMPhase): string => {
+  return phase === 'shop' ? 'shopping' : phase;
 };
 
 const writePlayerJsonToDB = (name: string, gender: string, appearance: string, personality: string, backstory: string) => {
@@ -61,6 +65,7 @@ const Dialogue: React.FC = () => {
   const [npcOptions, setNpcOptions] = useState<Record<string, string[]>>({});
   const [pendingCharacter, setPendingCharacter] = useState<CharacterData | null>(null);
   const [generatingAvatars, setGeneratingAvatars] = useState(false);
+  const [restored, setRestored] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const visibleTabs = getVisibleTabs();
@@ -78,13 +83,32 @@ const Dialogue: React.FC = () => {
     });
   };
 
+  // 页面首次加载时从 IndexedDB 恢复 dmPhase 和当前阶段对话历史
+  useEffect(() => {
+    (async () => {
+      const savedPhase = await loadDMPhase();
+      const phase: DMPhase = (savedPhase as DMPhase) || 'creation';
+      const historyKey = dmPhaseToHistoryKey(phase);
+      const history = await loadDialogueHistory(historyKey);
+
+      useDialogueStore.setState({ dmPhase: phase });
+      if (history && history.length > 0) {
+        const dState = useDialogueStore.getState();
+        useDialogueStore.setState({
+          npcMessages: { ...dState.npcMessages, [DM_NPC_ID]: history },
+          messages: dState.activeTabId === DM_NPC_ID ? history : dState.messages,
+        });
+      }
+      setRestored(true);
+    })();
+  }, []);
+
   // 初始化时自动打开 DM 对话
   useEffect(() => {
-    if (!isOpen) {
-      const prompt = getSystemPromptForDM(store.dmPhase);
-      openLLMDialogue(DM_NPC_ID, 'DM', prompt);
-    }
-  }, [isOpen, openLLMDialogue, store.dmPhase]);
+    if (!restored || isOpen) return;
+    const prompt = getSystemPromptForDM(store.dmPhase);
+    openLLMDialogue(DM_NPC_ID, 'DM', prompt);
+  }, [restored, isOpen, openLLMDialogue, store.dmPhase]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -93,6 +117,7 @@ const Dialogue: React.FC = () => {
 
   // DM 自动发起首轮对话（角色创建问候或游戏开场）
   useEffect(() => {
+    if (!restored) return;
     if (
       isOpen &&
       activeTabId === DM_NPC_ID &&
@@ -102,7 +127,15 @@ const Dialogue: React.FC = () => {
       const systemPrompt = getSystemPromptForDM(store.dmPhase);
       sendToLLM(DM_NPC_ID, 'DM', systemPrompt, '（玩家刚刚进入游戏，请主动向玩家打招呼并开启对话。）', false);
     }
-  }, [isOpen, activeTabId, isLoading, messages, store.dmPhase]);
+  }, [restored, isOpen, activeTabId, isLoading, messages, store.dmPhase]);
+
+  // 每当 DM 对话内容变化时，持久化当前阶段的对话历史（只保存可见的 assistant/user 消息）
+  useEffect(() => {
+    if (!restored || activeTabId !== DM_NPC_ID) return;
+    const key = dmPhaseToHistoryKey(store.dmPhase);
+    const visibleMessages = messages.filter((m) => m.role !== 'system');
+    void saveDialogueHistory(key, visibleMessages).catch(() => {});
+  }, [restored, activeTabId, store.dmPhase, messages]);
 
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
