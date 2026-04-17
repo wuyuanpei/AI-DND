@@ -64,69 +64,74 @@ const GameLayout: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen bg-gray-900 flex flex-col items-center justify-center p-4">
-      {/* 设置按钮 - 右上角 */}
-      <Settings />
-      {/* 规则按钮 - 设置按钮左边 */}
-      <Rules />
-      {/* 日志按钮 - 规则按钮左边 */}
-      <GameLogs />
-      {/* 记忆按钮 - 日志按钮左边 */}
-      <Memory />
+    <div className="h-screen w-screen bg-gray-900 flex flex-col overflow-hidden p-5">
+      {/* 顶部状态栏 */}
+      <div className="flex-shrink-0 flex items-center justify-between bg-gray-800 rounded-lg px-5 py-3 mb-4 w-full max-w-[1920px] mx-auto">
+        <div className="flex items-center gap-4">
+          <span className="text-white text-base font-bold">第一章 命运的起点</span>
+          <span className="text-gray-400 text-sm">当前任务：暂无</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Memory />
+          <GameLogs />
+          <Rules />
+          <Settings />
+        </div>
+      </div>
 
       {/* 主容器 */}
-      <div className="flex gap-4 bg-gray-800 rounded-lg p-4">
+      <div className="flex gap-5 bg-gray-800 rounded-lg p-5 flex-1 w-full max-w-[1920px] mx-auto min-h-0">
         {/* 左侧列：世界状态 + 背包 */}
-        <div className="w-[200px] flex flex-col gap-4">
-          <div className="bg-gray-700 rounded-lg p-3 h-[768px]">
+        <div className="w-[260px] flex flex-col gap-5 h-full overflow-y-auto">
+          <div className="bg-gray-700 rounded-lg p-4 flex-shrink-0 min-h-[28rem]">
             <WorldPanel />
           </div>
-          <div className="bg-gray-700 rounded-lg p-3 h-[420px]">
+          <div className="bg-gray-700 rounded-lg p-4 flex-1 min-h-0 overflow-hidden">
             <Inventory />
           </div>
         </div>
 
-        {/* 中间列：对话栏（占据原地图+下排对话区域） */}
-        <div className="w-[1024px] min-w-0 bg-gray-700 rounded-lg p-3 overflow-hidden self-stretch">
+        {/* 中间列：对话栏 */}
+        <div className="flex-1 min-w-0 bg-gray-700 rounded-lg p-4 overflow-hidden h-full">
           <Dialogue />
         </div>
 
         {/* 右侧列：状态 + 装备 + 技能 */}
-        <div className="w-[200px] flex flex-col gap-4">
-          <div className="bg-gray-700 rounded-lg p-3 h-[522px]">
+        <div className="w-[260px] flex flex-col gap-5 h-full overflow-y-auto">
+          <div className="bg-gray-700 rounded-lg p-4 flex-shrink-0 min-h-[28rem]">
             <Stats />
           </div>
-          <div className="bg-gray-700 rounded-lg p-3 h-[230px]">
+          <div className="bg-gray-700 rounded-lg p-4 flex-shrink-0">
             <Equipment />
           </div>
-          <div className="bg-gray-700 rounded-lg p-3 flex-1">
+          <div className="bg-gray-700 rounded-lg p-4 flex-1 min-h-0 overflow-hidden">
             <Spells />
           </div>
         </div>
+      </div>
 
-        {/* API 统计信息 - 底部（通过绝对定位保持在页面底部） */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center justify-center gap-6 text-xs text-gray-400">
-          <button
-            className="text-red-400 hover:text-red-300 transition-colors"
-            onClick={handleRestart}
-          >
-            重新开始游戏
-          </button>
-          <span>API 调用：{apiCallCount} 次</span>
-          <span>Prompt Token: {totalPromptTokens}</span>
-          <span>Completion Token: {totalCompletionTokens}</span>
-          <span>Total Token: {totalTokens}</span>
-          <button
-            className="ml-2 text-gray-500 hover:text-blue-400 transition-colors"
-            title="清零统计数据"
-            onClick={() => useSettingsStore.getState().resetStats()}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 1 10 7 10"></polyline>
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-            </svg>
-          </button>
-        </div>
+      {/* API 统计信息 - 底部 */}
+      <div className="flex-shrink-0 flex items-center justify-center gap-8 text-sm text-gray-400 py-3">
+        <button
+          className="text-red-400 hover:text-red-300 transition-colors"
+          onClick={handleRestart}
+        >
+          重新开始游戏
+        </button>
+        <span>API 调用：{apiCallCount} 次</span>
+        <span>Prompt Token: {totalPromptTokens}</span>
+        <span>Completion Token: {totalCompletionTokens}</span>
+        <span>Total Token: {totalTokens}</span>
+        <button
+          className="ml-2 text-gray-500 hover:text-blue-400 transition-colors"
+          title="清零统计数据"
+          onClick={() => useSettingsStore.getState().resetStats()}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+          </svg>
+        </button>
       </div>
     </div>
   );

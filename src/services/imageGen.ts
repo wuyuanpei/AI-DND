@@ -30,7 +30,7 @@ export async function generateCharacterPortrait(
       ],
     },
     parameters: {
-      size: '768*1024',
+      size: '1024*1024',
       n,
     },
   };

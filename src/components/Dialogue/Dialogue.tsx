@@ -353,50 +353,44 @@ const Dialogue: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden min-w-0" style={{ minWidth: 0 }}>
+    <div className="h-full flex flex-col overflow-hidden min-w-0">
       {/* DM 名称栏 */}
-      <div className="flex-shrink-0 border-b border-gray-600 pb-1 mb-1">
+      <div className="flex-shrink-0 border-b border-gray-600 pb-2 mb-2">
         <div className="flex items-center">
-          <span className="px-2 py-1 rounded text-xs bg-yellow-600 text-white">
+          <span className="px-3 py-1.5 rounded text-sm bg-yellow-600 text-white">
             {dmName}
           </span>
         </div>
       </div>
 
-      {/* 对话内容 - 固定高度可滚动区域 */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden mb-2 text-white text-sm min-h-0 max-h-full min-w-0" style={{ minWidth: 0, width: '992px' }}>
+      {/* 对话内容 - 可滚动区域 */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden mb-3 text-white text-base min-h-0">
         {/* 脚本模式：显示当前节点文本 */}
         {mode === 'scripted' && currentNode && (
-          <div
-            className="bg-gray-600 rounded p-2 mb-2"
-            style={{ width: '992px', wordBreak: 'break-word', whiteSpace: 'pre-wrap', overflowWrap: 'break-word' }}
-          >{currentNode.text}</div>
+          <div className="bg-gray-600 rounded p-3 mb-3 break-words whitespace-pre-wrap">
+            {currentNode.text}
+          </div>
         )}
 
         {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
-          <div className="space-y-2" style={{ width: '992px', minWidth: 0 }}>
+          <div className="space-y-3">
             {messages
               .filter((m) => m.role !== 'system')
               .map((msg, idx) => (
                 <div
                   key={idx}
-                  className="p-2 rounded"
-                  style={{
-                    width: '892px',
-                    whiteSpace: 'pre-wrap',
-                    overflowWrap: 'break-word',
-                    borderRadius: '8px',
-                    background: msg.role === 'user' ? '#2563eb' : '#4b5563',
-                    marginLeft: msg.role === 'user' ? '100px' : '0',
-                    marginRight: msg.role === 'user' ? '0' : '100px',
-                  }}
+                  className={`p-3 rounded-lg max-w-[85%] break-words whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 ml-auto'
+                      : 'bg-gray-600 mr-auto'
+                  }`}
                 >
                   {renderBoldText(msg.content)}
                 </div>
               ))}
             {isLoading && (
-              <div className="text-gray-400 text-center">思考中...</div>
+              <div className="text-gray-400 text-center text-base">思考中...</div>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -407,11 +401,11 @@ const Dialogue: React.FC = () => {
       <div className="flex-shrink-0">
         {/* 脚本模式：显示选项 */}
         {mode === 'scripted' && currentNode?.choices && (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {currentNode.choices.map((choice, idx) => (
               <button
                 key={idx}
-                className="w-full bg-gray-600 hover:bg-gray-500 text-white text-xs p-2 rounded text-left"
+                className="w-full bg-gray-600 hover:bg-gray-500 text-white text-sm p-3 rounded text-left"
                 onClick={() => selectChoice(idx)}
               >
                 {choice.text}
@@ -422,10 +416,10 @@ const Dialogue: React.FC = () => {
 
         {/* LLM 模式：输入框 */}
         {mode === 'llm' && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {/* 头像生成中提示 */}
             {pendingCharacter && generatingAvatars && (
-              <div className="text-gray-300 text-sm text-center py-2">
+              <div className="text-gray-300 text-base text-center py-2">
                 正在根据角色设定生成头像，请稍候...
               </div>
             )}
@@ -439,7 +433,7 @@ const Dialogue: React.FC = () => {
                     .map((opt, idx) => (
                       <button
                         key={idx}
-                        className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1.5 rounded border border-gray-500"
+                        className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
                         onClick={() => handleOptionClick(opt)}
                       >
                         {opt}
@@ -447,7 +441,7 @@ const Dialogue: React.FC = () => {
                     ))
                 ) : (
                   <button
-                    className="bg-gray-600 hover:bg-gray-500 text-white text-xs px-3 py-1.5 rounded border border-gray-500"
+                    className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
                     onClick={() => handleOptionClick('请给我一些决策选项')}
                   >
                     请给我一些决策选项
@@ -459,7 +453,7 @@ const Dialogue: React.FC = () => {
             <div className="flex gap-2">
               <input
                 type="text"
-                className="flex-1 bg-gray-600 text-white text-sm p-2 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
+                className="flex-1 bg-gray-600 text-white text-base p-3 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
                 placeholder="输入消息..."
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
@@ -467,7 +461,7 @@ const Dialogue: React.FC = () => {
                 disabled={isLoading || generatingAvatars || pendingCharacter !== null}
               />
               <button
-                className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-3 rounded disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-500 text-white text-base px-5 rounded disabled:opacity-50"
                 onClick={handleLLMSubmit}
                 disabled={isLoading || !userInput.trim() || generatingAvatars || pendingCharacter !== null}
               >

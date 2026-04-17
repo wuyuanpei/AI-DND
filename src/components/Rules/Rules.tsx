@@ -18,7 +18,7 @@ const Rules: React.FC = () => {
     <>
       {/* 规则按钮 - 设置按钮左边 */}
       <button
-        className="fixed top-4 right-24 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-2 rounded shadow-lg z-10"
+        className="bg-gray-700 hover:bg-gray-600 text-white text-sm px-4 py-2 rounded shadow-lg"
         onClick={() => setIsOpen(true)}
       >
         📜 规则
@@ -27,10 +27,10 @@ const Rules: React.FC = () => {
       {/* 规则面板 - 模态框 */}
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setIsOpen(false)}>
-          <div className="bg-gray-800 rounded-lg max-w-2xl w-full mx-4 shadow-2xl border border-gray-600 flex flex-col max-h-[80vh] z-[60]" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-gray-800 rounded-lg max-w-5xl w-[95vw] mx-4 shadow-2xl border border-gray-600 flex flex-col max-h-[85vh] z-[60]" onClick={(e) => e.stopPropagation()}>
             {/* 标题栏 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-600">
-              <div className="text-white font-bold text-lg">游戏规则</div>
+              <div className="text-white font-bold text-xl">游戏规则</div>
               <button
                 className="text-gray-400 hover:text-white text-xl"
                 onClick={() => setIsOpen(false)}
@@ -44,7 +44,7 @@ const Rules: React.FC = () => {
               {tabs.map(tab => (
                 <button
                   key={tab.id}
-                  className={`px-4 py-2 text-sm font-medium ${
+                  className={`px-4 py-2 text-base font-medium ${
                     activeTab === tab.id
                       ? 'text-yellow-400 border-b-2 border-yellow-400 bg-gray-700'
                       : 'text-gray-400 hover:text-white hover:bg-gray-700'
@@ -59,7 +59,7 @@ const Rules: React.FC = () => {
             {/* 内容区域 */}
             <div className="flex-1 overflow-y-auto p-4">
               {currentTab && (
-                <div className="text-gray-300 text-sm whitespace-pre-line">
+                <div className="text-gray-300 text-base whitespace-pre-line">
                   {currentTab.content}
                 </div>
               )}
@@ -68,7 +68,7 @@ const Rules: React.FC = () => {
             {/* 关闭按钮 */}
             <div className="p-4 border-t border-gray-600 flex justify-end">
               <button
-                className="bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-500 text-white text-base px-5 py-2.5 rounded"
                 onClick={() => setIsOpen(false)}
               >
                 关闭

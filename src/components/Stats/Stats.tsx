@@ -8,17 +8,16 @@ const Stats: React.FC = () => {
   const mpPercent = (mp / maxMp) * 100;
   // 简单计算：每级 100exp，升级需要 level * 100 exp
   const expToNextLevel = level * 100;
-  const expPercent = Math.min(100, (exp / expToNextLevel) * 100);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <h3 className="text-white text-sm font-bold mb-1 border-b border-gray-600 pb-1 flex-shrink-0">
+    <div className="flex flex-col">
+      <h3 className="text-white text-lg font-bold mb-2 border-b border-gray-600 pb-1 flex-shrink-0">
         冒险者
       </h3>
 
-      {/* 头像占位 - 3:4 比例，与栏目标齐宽 (180px : 240px = 4:3) */}
-      <div className="flex-shrink-0 flex justify-center mb-1 mt-1">
-        <div className="w-[180px] h-[240px] bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center overflow-hidden">
+      {/* 头像占位 */}
+      <div className="flex-shrink-0 flex justify-center mb-2 mt-1">
+        <div className="w-full max-w-[150px] aspect-square bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center overflow-hidden">
           {avatar ? (
             <img src={avatar} alt="角色头像" className="w-full h-full object-cover" />
           ) : (
@@ -28,32 +27,18 @@ const Stats: React.FC = () => {
       </div>
 
       {/* 名字和等级 */}
-      <div className="flex-shrink-0 text-center mb-1">
-        <div className="text-white text-sm font-bold">{name}</div>
-        <div className="text-yellow-400 text-xs">Lv.{level}</div>
-      </div>
-
-      {/* 经验条 */}
-      <div className="flex-shrink-0 mb-1">
-        <div className="flex justify-between text-xs text-gray-400 mb-0.5">
-          <span>EXP</span>
-          <span>{exp}/{expToNextLevel}</span>
-        </div>
-        <div className="h-2 bg-gray-600 rounded overflow-hidden">
-          <div
-            className="h-full bg-purple-500 transition-all duration-300"
-            style={{ width: `${expPercent}%` }}
-          />
-        </div>
+      <div className="flex-shrink-0 text-center mb-2">
+        <div className="text-white text-base font-bold">{name}</div>
+        <div className="text-yellow-400 text-sm">Lv.{level} (经验: {exp}/{expToNextLevel})</div>
       </div>
 
       {/* 血条 */}
-      <div className="flex-shrink-0 mb-1">
-        <div className="flex justify-between text-xs text-gray-400 mb-0.5">
+      <div className="flex-shrink-0 mb-2">
+        <div className="flex justify-between text-sm text-gray-400 mb-1">
           <span>HP</span>
           <span className="text-red-400">{hp}/{maxHp}</span>
         </div>
-        <div className="h-2 bg-gray-600 rounded overflow-hidden">
+        <div className="h-3 bg-gray-600 rounded overflow-hidden">
           <div
             className="h-full bg-red-500 transition-all duration-300"
             style={{ width: `${hpPercent}%` }}
@@ -62,12 +47,12 @@ const Stats: React.FC = () => {
       </div>
 
       {/* 魔法条 */}
-      <div className="flex-shrink-0 mb-1">
-        <div className="flex justify-between text-xs text-gray-400 mb-0.5">
+      <div className="flex-shrink-0 mb-2">
+        <div className="flex justify-between text-sm text-gray-400 mb-1">
           <span>MP</span>
           <span className="text-blue-400">{mp}/{maxMp}</span>
         </div>
-        <div className="h-2 bg-gray-600 rounded overflow-hidden">
+        <div className="h-3 bg-gray-600 rounded overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-300"
             style={{ width: `${mpPercent}%` }}
@@ -77,14 +62,14 @@ const Stats: React.FC = () => {
 
       {/* 金币 */}
       <div className="flex-shrink-0 text-center py-1">
-        <div className="text-yellow-400 text-xs">
+        <div className="text-yellow-400 text-sm">
           💰 {gold} 金币
         </div>
       </div>
 
       {/* 四维属性 */}
-      <div className="flex-shrink-0 mt-auto pt-1 border-t border-gray-600">
-        <div className="grid grid-cols-2 gap-1 text-xs">
+      <div className="flex-shrink-0 mt-auto pt-2 border-t border-gray-600">
+        <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="flex justify-between text-gray-300">
             <span>力量</span>
             <span className="text-white">{strength}</span>
