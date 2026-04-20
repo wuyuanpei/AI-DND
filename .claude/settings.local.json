@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm run *)",
       "Bash(npm install *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(python3 *)",
+      "Bash(node scripts/generate-weapon-icons.mjs)",
+      "Bash(DASHSCOPE_API_KEY=test node scripts/generate-weapon-icons.mjs)"
     ]
   }
 }

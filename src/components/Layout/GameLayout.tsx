@@ -6,6 +6,7 @@ import Stats from '../Stats/Stats';
 import WorldPanel from '../WorldPanel/WorldPanel';
 import Settings from '../Settings/Settings';
 import Rules from '../Rules/Rules';
+import Encyclopedia from '../Encyclopedia/Encyclopedia';
 import Inventory from '../Inventory/Inventory';
 import GameLogs from '../GameLogs/GameLogs';
 import Memory from '../Memory/Memory';
@@ -72,6 +73,7 @@ const GameLayout: React.FC = () => {
           <span className="text-gray-400 text-sm">当前任务：暂无</span>
         </div>
         <div className="flex items-center gap-2">
+          <Encyclopedia />
           <Memory />
           <GameLogs />
           <Rules />

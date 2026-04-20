@@ -7,6 +7,93 @@ interface Tab {
   content: string;
 }
 
+// Parse markdown table lines into { headers: string[], rows: string[][] }
+function parseMarkdownTable(lines: string[]): { headers: string[]; rows: string[][] } | null {
+  if (lines.length < 2) return null;
+  const headers = lines[0].split('|').map(c => c.trim()).filter(c => c.length > 0);
+  // Skip separator line (line 1)
+  const rows: string[][] = [];
+  for (let i = 2; i < lines.length; i++) {
+    const cells = lines[i].split('|').map(c => c.trim()).filter(c => c.length > 0);
+    if (cells.length > 0) rows.push(cells);
+  }
+  if (headers.length === 0 || rows.length === 0) return null;
+  return { headers, rows };
+}
+
+// Render content by splitting into text blocks and table blocks
+function renderContent(content: string): React.ReactNode[] {
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+  let textBuffer: string[] = [];
+  let tableBuffer: string[] = [];
+  let keyIdx = 0;
+
+  const flushText = () => {
+    if (textBuffer.length > 0) {
+      const text = textBuffer.join('\n');
+      if (text.trim()) {
+        elements.push(
+          <div key={`text-${keyIdx++}`} className="text-gray-300 text-base whitespace-pre-line mb-3">
+            {text}
+          </div>
+        );
+      }
+      textBuffer = [];
+    }
+  };
+
+  const flushTable = () => {
+    if (tableBuffer.length > 0) {
+      const parsed = parseMarkdownTable(tableBuffer);
+      if (parsed) {
+        elements.push(
+          <div key={`table-${keyIdx++}`} className="overflow-x-auto mb-4">
+            <table className="w-full text-sm text-left text-gray-300 border border-gray-600">
+              <thead className="bg-gray-700 text-gray-100">
+                <tr>
+                  {parsed.headers.map((h, i) => (
+                    <th key={i} className="px-3 py-2 border border-gray-600 font-semibold">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {parsed.rows.map((row, ri) => (
+                  <tr key={ri} className={ri % 2 === 0 ? 'bg-gray-800' : 'bg-gray-750'}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-2 border border-gray-600">{cell}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      } else {
+        // Fallback: render as text if parsing failed
+        textBuffer.push(...tableBuffer);
+        flushText();
+      }
+      tableBuffer = [];
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('|')) {
+      flushText();
+      tableBuffer.push(trimmed);
+    } else {
+      flushTable();
+      textBuffer.push(line);
+    }
+  }
+  flushText();
+  flushTable();
+
+  return elements;
+}
+
 const Rules: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('skills');
@@ -59,8 +146,8 @@ const Rules: React.FC = () => {
             {/* 内容区域 */}
             <div className="flex-1 overflow-y-auto p-4">
               {currentTab && (
-                <div className="text-gray-300 text-base whitespace-pre-line">
-                  {currentTab.content}
+                <div>
+                  {renderContent(currentTab.content)}
                 </div>
               )}
             </div>

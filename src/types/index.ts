@@ -1,3 +1,12 @@
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export const RARITY_LABELS: Record<Rarity, string> = {
+  common: '普通',
+  rare: '稀有',
+  epic: '史诗',
+  legendary: '传说',
+};
+
 // 玩家状态
 export interface Equipment {
   helmet?: Item;
@@ -6,19 +15,41 @@ export interface Equipment {
   mainWeapon?: Item;
   offWeapon?: Item;
   ranged?: Item;
-  top?: Item;
-  pants?: Item;
-  boots?: Item;
 }
 
+// 运行时物品（玩家背包/装备中的实际物品）
+// 武器类 item 可以通过 WeaponPreset 补充 type 后生成
 export interface Item {
   id: string;
   name: string;
-  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'consumable' |
-        'chest' | 'shield' | 'mainWeapon' | 'offWeapon' | 'ranged' |
-        'top' | 'pants';
+  type: 'weapon' | 'armor' | 'helmet' | 'consumable' |
+        'chest' | 'shield' | 'mainWeapon' | 'offWeapon' | 'ranged';
   description: string;
+  rarity?: Rarity;
+  weaponType?: 'melee' | 'ranged';
+  damage?: string;
+  icon?: string;
+  price?: number;           // 购买价格
+  effect?: string;          // 特殊效果描述
+  durability?: number;      // 当前剩余使用次数
+  maxDurability?: number;   // 持久度上限
   stats?: Record<string, number>;
+}
+
+// 武器预设（来自 weapons.json 的静态数据）
+// 与 Item 的区别：不含 type 字段，因为近战武器可装主武或副武
+// 装备时由前端根据玩家选择补充 type 来生成 Item
+export interface WeaponPreset {
+  id: string;
+  name: string;
+  weaponType: 'melee' | 'ranged';
+  description: string;
+  rarity: Rarity;
+  damage: string;
+  durability: number;  // 持久度上限（可使用的次数）
+  price: number;       // 购买价格（金币）
+  effect?: string;     // 特殊效果描述（普通武器无，稀有部分有，史诗基本有，传说全有）
+  icon: string;
 }
 
 export interface Skill {
