@@ -33,7 +33,7 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
   return buildSystemPrompt(base);
 };
 
-const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>): string => {
+const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, purchasedIds: Set<string>): string => {
   const weapons = shopWeapons.map((w) => ({
     id: w.id as string,
     name: w.name as string,
@@ -46,7 +46,7 @@ const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>): strin
     effect: w.effect as string | undefined,
     icon: w.icon as string,
   }));
-  return buildSystemPrompt(buildShopSystemPrompt(weapons));
+  return buildSystemPrompt(buildShopSystemPrompt(weapons, purchasedIds));
 };
 
 const dmPhaseToHistoryKey = (phase: DMPhase): string => {
@@ -239,7 +239,7 @@ const Dialogue: React.FC = () => {
     if (store.dmPhase !== 'shop' || store.shopWeapons.length === 0) return;
     if (!restored || isOpen === false) return;
     if (messages.filter((m) => m.role !== 'system').length > 0) return;
-    const shopPrompt = getShopSystemPrompt(store.shopWeapons);
+    const shopPrompt = getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds);
     sendToLLM(shopPrompt, '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）', false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store.dmPhase, store.shopWeapons.length, restored, isOpen]);
@@ -393,7 +393,7 @@ const Dialogue: React.FC = () => {
     if (!userInput.trim()) return;
 
     const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons)
+      ? getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds)
       : getSystemPromptForDM(store.dmPhase);
     await sendToLLM(systemPrompt, userInput.trim(), true);
     setUserInput('');
@@ -402,7 +402,7 @@ const Dialogue: React.FC = () => {
   // 处理选项点击
   const handleOptionClick = async (text: string) => {
     const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons)
+      ? getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds)
       : getSystemPromptForDM(store.dmPhase);
     // 清除当前选项，防止重复点击
     setOptions([]);
@@ -542,7 +542,7 @@ const Dialogue: React.FC = () => {
                       void savePurchasedWeaponIds(Array.from(newPurchased)).catch(() => {});
                       savePlayerStatsToStorage();
 
-                      const systemPrompt = getShopSystemPrompt(store.shopWeapons);
+                      const systemPrompt = getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds);
                       const userMessage = `（我购买了 ${purchaseNames.join('、')}，共花费 ${totalPrice} 金币）`;
                       void sendToLLM(systemPrompt, userMessage, true);
                     }}
