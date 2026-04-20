@@ -1180,7 +1180,7 @@
             "weaponType": "melee",
             "rarity": "common",
             "description": "坚硬实木打造的木剑，无锋无刃，适合新手练习。",
-            "damage": "1d4+7",
+            "damage": "1d4+5",
             "durability": 60,
             "price": 70,
             "icon": "weapons/hardwood_sword.png"
@@ -1202,7 +1202,7 @@
             "weaponType": "melee",
             "rarity": "common",
             "description": "铁制小刀，小巧便携，日常切割与临时自卫两用。",
-            "damage": "1d4+7",
+            "damage": "1d6+6",
             "durability": 50,
             "price": 80,
             "icon": "weapons/iron_knife.png"

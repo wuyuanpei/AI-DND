@@ -28,7 +28,6 @@ export function buildPlayerContextPrompt(state: PlayerState): string {
 生命值：${state.hp} / ${state.maxHp}
 魔法值：${state.mp} / ${state.maxMp}
 金币：${state.gold}
-负重：${state.getCurrentWeight()} / ${state.weightLimit}
 
 【四维属性】
 力量（STR）：${state.strength}

@@ -1,42 +1,230 @@
-import React from 'react';
-import { usePlayerStore, INVENTORY_SLOTS } from '../../store/playerStore';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { usePlayerStore } from '../../store/playerStore';
 import type { Item } from '../../types';
 
-const Inventory: React.FC = () => {
-  const { inventory, weightLimit } = usePlayerStore();
+const getRarityColor = (rarity: string): string => {
+  switch (rarity) {
+    case 'common': return 'border-gray-400';
+    case 'rare': return 'border-blue-400';
+    case 'epic': return 'border-purple-400';
+    case 'legendary': return 'border-yellow-400';
+    default: return 'border-gray-500';
+  }
+};
 
-  // 计算当前重量（物品数量）
-  const currentWeight = Object.keys(inventory).length;
+const getRarityTextColor = (rarity: string): string => {
+  switch (rarity) {
+    case 'common': return 'text-gray-400';
+    case 'rare': return 'text-blue-400';
+    case 'epic': return 'text-purple-400';
+    case 'legendary': return 'text-yellow-400';
+    default: return 'text-gray-400';
+  }
+};
+
+const getRarityLabel = (rarity: string): string => {
+  switch (rarity) {
+    case 'common': return '普通';
+    case 'rare': return '稀有';
+    case 'epic': return '史诗';
+    case 'legendary': return '传说';
+    default: return '普通';
+  }
+};
+
+const Inventory: React.FC = () => {
+  const { inventory, equipItem, organizeInventory } = usePlayerStore();
+  const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 构建 slot -> item 映射，并计算堆叠数量
+  const slotItems: Record<number, Item> = {};
+  const itemCounts: Record<string, number> = {};
+  for (const [slotStr, item] of Object.entries(inventory)) {
+    if (!item) continue;
+    const slot = Number(slotStr);
+    slotItems[slot] = item;
+    itemCounts[item.id] = (itemCounts[item.id] ?? 0) + 1;
+  }
+
+  const shownSlots = new Set<number>(Object.keys(slotItems).map(Number));
+  const slotKeys = Object.keys(slotItems).map(Number);
+  const maxSlot = slotKeys.length > 0 ? Math.max(...slotKeys) : 0;
+  const minSlots = 30;
+  const totalSlots = Math.max(minSlots, maxSlot + 1);
+
+  const updateTooltipPosition = useCallback((slotEl: HTMLElement) => {
+    const rect = slotEl.getBoundingClientRect();
+    setTooltipPos({
+      top: rect.top - 8,
+      left: rect.left + rect.width / 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (hoveredSlot !== null) {
+      const el = containerRef.current?.querySelector(`[data-slot="${hoveredSlot}"]`) as HTMLElement | null;
+      if (el) updateTooltipPosition(el);
+    }
+  }, [hoveredSlot, updateTooltipPosition]);
+
+  const handleEquip = (slot: number, equipType: 'mainWeapon' | 'offWeapon' | 'ranged') => {
+    const item = inventory[slot];
+    if (!item) return;
+    const itemCopy: Item = { ...item, type: equipType };
+    equipItem(itemCopy, slot);
+    setHoveredSlot(null);
+  };
+
+  const handleMouseEnterSlot = useCallback((slot: number) => {
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredSlot(slot);
+    }, 1000);
+  }, []);
+
+  const handleMouseLeaveSlot = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setTimeout(() => {
+      if (!tooltipRef.current?.matches(':hover')) {
+        setHoveredSlot(null);
+      }
+    }, 100);
+  }, []);
+
+  const handleMouseLeaveTooltip = useCallback(() => {
+    setTimeout(() => {
+      if (!containerRef.current?.querySelector('[data-slot]:hover')) {
+        setHoveredSlot(null);
+      }
+    }, 100);
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-gray-600 pb-1 mb-2 flex-shrink-0">
-        <h3 className="text-white text-lg font-bold">背包</h3>
-        <span className="text-sm text-gray-400">{currentWeight} / {weightLimit} kg</span>
+        <h3 className="text-white text-lg font-bold">背包<span className="text-gray-500 text-[10px] font-normal ml-1">鼠标悬浮查看详情</span></h3>
+        <button
+          className="bg-gray-500/50 hover:bg-gray-500/80 text-gray-300 text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+          onClick={organizeInventory}
+        >
+          整理
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto min-h-0">
-        {/* 4 列 7 行 = 28 格 */}
-        <div className="grid grid-cols-4 gap-2 content-start">
-          {Array.from({ length: INVENTORY_SLOTS }).map((_, idx) => {
-            const item = inventory[idx] as Item | undefined;
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative"
+      >
+        <div className="grid grid-cols-3 gap-2 content-start">
+          {Array.from({ length: totalSlots }).map((_, idx) => {
+            const item = slotItems[idx];
+            if (!item) {
+              return (
+                <div
+                  key={idx}
+                  className="aspect-square bg-gray-700 rounded border border-gray-600 flex items-center justify-center"
+                >
+                  <span className="text-gray-600 text-sm">空</span>
+                </div>
+              );
+            }
+
+            const count = itemCounts[item.id] ?? 1;
+            const rarityBorder = getRarityColor(item.rarity ?? '');
+
             return (
               <div
                 key={idx}
-                className={`aspect-square bg-gray-600 rounded border-2 border-gray-500 flex items-center justify-center ${
-                  item ? 'cursor-pointer hover:border-yellow-400' : ''
-                }`}
-                title={item?.name || '空'}
+                data-slot={idx}
+                className="relative"
+                onMouseEnter={() => handleMouseEnterSlot(idx)}
+                onMouseLeave={handleMouseLeaveSlot}
               >
-                {item ? (
-                  <span className="text-sm text-white text-center px-1">{item.name}</span>
-                ) : (
-                  <span className="text-gray-600 text-sm">空</span>
-                )}
+                <div className={`aspect-square bg-gray-700 rounded border-2 ${rarityBorder} flex flex-col items-center justify-center cursor-pointer hover:brightness-110 transition`}>
+                  {item.icon ? (
+                    <div className="relative">
+                      <img src={`/${item.icon}`} alt={item.name} className="w-12 h-12 object-contain" />
+                      <span className="absolute bottom-0 right-0 text-[11px] text-white font-bold bg-black/90 rounded px-0.5 leading-tight shadow">
+                        x{count}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-gray-400 text-lg">?</span>
+                  )}
+                  <span className="text-white text-[11px] text-center leading-tight mt-0.5 px-1">{item.name}</span>
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Tooltip 使用 fixed 定位，pointer-events-auto 允许交互 */}
+      {hoveredSlot !== null && tooltipPos && (() => {
+        const item = inventory[hoveredSlot] as Item | undefined;
+        if (!item) return null;
+        const isMelee = item.weaponType === 'melee';
+        const isRanged = item.weaponType === 'ranged';
+        return (
+          <div
+            ref={tooltipRef}
+            className="fixed w-64 bg-gray-900 border border-gray-500 rounded-lg shadow-xl p-3 z-[9999]"
+            style={{ top: tooltipPos.top, left: tooltipPos.left, transform: 'translateX(-50%)' }}
+            onMouseLeave={handleMouseLeaveTooltip}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              {item.icon && <img src={`/${item.icon}`} alt="" className="w-8 h-8 object-contain" />}
+              <div>
+                <div className="text-white font-semibold text-sm">{item.name}</div>
+                {item.rarity && (
+                  <div className={`text-xs ${getRarityTextColor(item.rarity)}`}>{getRarityLabel(item.rarity)}</div>
+                )}
+              </div>
+            </div>
+            {item.description && <div className="text-gray-300 text-xs mb-1.5">{item.description}</div>}
+            <div className="text-gray-400 text-xs space-y-0.5">
+              {item.damage && <div>伤害: {item.damage}</div>}
+              {item.durability !== undefined && <div>持久度: {item.durability} / {item.maxDurability ?? item.durability}</div>}
+              {item.weaponType && <div>类型: {isMelee ? '近战武器' : '远程武器'}</div>}
+              {item.effect && <div className="text-green-400">特效: {item.effect}</div>}
+              {item.price !== undefined && <div>价格: {item.price} 金币（出售价 {Math.floor(item.price * 0.6)} 金币）</div>}
+            </div>
+            {(isMelee || isRanged) && (
+              <div className="mt-2 pt-2 border-t border-gray-700 flex gap-1.5">
+                {isMelee && (
+                  <button
+                    className="flex-1 bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                    onClick={() => handleEquip(hoveredSlot, 'mainWeapon')}
+                  >
+                    装备主武
+                  </button>
+                )}
+                {isMelee && (
+                  <button
+                    className="flex-1 bg-green-700 hover:bg-green-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                    onClick={() => handleEquip(hoveredSlot, 'offWeapon')}
+                  >
+                    装备副武
+                  </button>
+                )}
+                {isRanged && (
+                  <button
+                    className="flex-1 bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                    onClick={() => handleEquip(hoveredSlot, 'ranged')}
+                  >
+                    装备远程
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -40,7 +40,6 @@ export interface PlayerState {
   maxMp: number;
   exp: number;
   gold: number;
-  weightLimit: number;
   equipment: Equipment;
   inventory: Record<number, Item>; // 使用数字索引作为 key
   skills: Skill[];
@@ -64,10 +63,12 @@ export interface PlayerState {
   takeDamage: (amount: number) => void;
   heal: (amount: number) => void;
   addGold: (amount: number) => void;
+  deductGold: (amount: number) => void;
   addItem: (item: Item, slot?: number) => void;
   removeItem: (slot: number) => void;
   equipItem: (item: Item, slot: number) => void;
-  getCurrentWeight: () => number;
+  unequipItem: (slotKey: keyof Equipment) => void;
+  organizeInventory: () => void;
 }
 
 const initialPlayerState = {
@@ -80,7 +81,6 @@ const initialPlayerState = {
   maxMp: 50,
   exp: 0,
   gold: 0,
-  weightLimit: 100,
   equipment: {},
   inventory: {},
   skills: [],
@@ -122,7 +122,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       level: 1,
       exp: 0,
       gold,
-      weightLimit: 10 * character.strength,
       equipment: {},
       inventory: {},
       skills: [],
@@ -138,20 +137,24 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   addGold: (amount) => set((state) => ({
     gold: state.gold + amount
   })),
+  deductGold: (amount) => set((state) => ({
+    gold: Math.max(0, state.gold - amount)
+  })),
   addItem: (item, slot) => {
     if (slot !== undefined) {
       set((state) => ({
         inventory: { ...state.inventory, [slot]: item }
       }));
     } else {
-      // 寻找第一个空槽
       set((state) => {
         for (let i = 0; i < INVENTORY_SLOTS; i++) {
           if (!state.inventory[i]) {
             return { inventory: { ...state.inventory, [i]: item } };
           }
         }
-        return state;
+        // 背包满，自动扩展
+        const newSlot = Object.keys(state.inventory).length;
+        return { inventory: { ...state.inventory, [newSlot]: item } };
       });
     }
   },
@@ -163,6 +166,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   equipItem: (item, slot) => set((state) => {
     const newInventory = { ...state.inventory };
     delete newInventory[slot];
+
+    const slotKey = item.type as keyof Equipment;
+    const oldEquipped = state.equipment[slotKey];
+
+    // 如果该装备栏已有装备，将其放回背包第一个空格
+    if (oldEquipped) {
+      const firstEmptySlot = (() => {
+        for (let i = 0; i < INVENTORY_SLOTS; i++) {
+          if (!newInventory[i]) return i;
+        }
+        // 背包满，扩展格子
+        return Object.keys(newInventory).length;
+      })();
+      newInventory[firstEmptySlot] = oldEquipped;
+    }
+
     return {
       equipment: {
         ...state.equipment,
@@ -171,8 +190,54 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       inventory: newInventory
     };
   }),
-  getCurrentWeight: () => {
-    const state = get();
-    return Object.keys(state.inventory).length;
-  },
+  unequipItem: (slotKey) => set((state) => {
+    const item = state.equipment[slotKey];
+    if (!item) return state;
+    const newEquipment = { ...state.equipment };
+    delete newEquipment[slotKey];
+    const newInventory = { ...state.inventory };
+    for (let i = 0; i < INVENTORY_SLOTS; i++) {
+      if (!newInventory[i]) {
+        newInventory[i] = item;
+        return { equipment: newEquipment, inventory: newInventory };
+      }
+    }
+    // 背包满，自动扩展
+    const newSlot = Object.keys(newInventory).length;
+    newInventory[newSlot] = item;
+    return { equipment: newEquipment, inventory: newInventory };
+  }),
+  organizeInventory: () => set((state) => {
+    const items = Object.entries(state.inventory)
+      .map(([slot, item]) => item as Item)
+      .filter(Boolean);
+
+    const categoryOrder = ['melee', 'ranged', 'helmet', 'chest', 'shield', 'consumable', 'other'];
+
+    const getCategory = (item: Item): string => {
+      if (item.weaponType === 'melee') return 'melee';
+      if (item.weaponType === 'ranged') return 'ranged';
+      if (item.type === 'helmet') return 'helmet';
+      if (item.type === 'chest' || item.type === 'armor') return 'chest';
+      if (item.type === 'shield') return 'shield';
+      if (item.type === 'consumable') return 'consumable';
+      return 'other';
+    };
+
+    const sorted = items.sort((a, b) => {
+      const catA = getCategory(a);
+      const catB = getCategory(b);
+      if (catA !== catB) {
+        return categoryOrder.indexOf(catA) - categoryOrder.indexOf(catB);
+      }
+      return (b.price ?? 0) - (a.price ?? 0);
+    });
+
+    const newInventory: Record<number, Item> = {};
+    sorted.forEach((item, idx) => {
+      newInventory[idx] = item;
+    });
+
+    return { inventory: newInventory };
+  }),
 }));

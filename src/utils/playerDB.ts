@@ -1,10 +1,11 @@
 import type { DialogueMessage } from '../types';
 
 const DB_NAME = 'ai-dnd-player';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const PLAYER_STORE = 'playerData';
 const LOGS_STORE = 'gameLogs';
 const DIALOGUE_STORE = 'dialogueHistory';
+const SHOP_STORE = 'shopWeapons';
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,6 +20,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(DIALOGUE_STORE)) {
         db.createObjectStore(DIALOGUE_STORE);
+      }
+      if (!db.objectStoreNames.contains(SHOP_STORE)) {
+        db.createObjectStore(SHOP_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -199,5 +203,64 @@ export async function clearGameLogs(): Promise<void> {
     tx.objectStore(LOGS_STORE).delete('logs');
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Shop weapons persistence (store IDs only, full data from weapons.json)
+export async function saveShopWeaponIds(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_STORE, 'readwrite');
+    tx.objectStore(SHOP_STORE).put(ids, 'weaponIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadShopWeaponIds(): Promise<string[] | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_STORE, 'readonly');
+    const request = tx.objectStore(SHOP_STORE).get('weaponIds');
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : null);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function clearShopWeapons(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_STORE, 'readwrite');
+    tx.objectStore(SHOP_STORE).delete('weaponIds');
+    tx.objectStore(SHOP_STORE).delete('purchasedWeaponIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// Purchased weapon IDs within current shop
+export async function savePurchasedWeaponIds(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_STORE, 'readwrite');
+    tx.objectStore(SHOP_STORE).put(ids, 'purchasedWeaponIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadPurchasedWeaponIds(): Promise<string[] | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_STORE, 'readonly');
+    const request = tx.objectStore(SHOP_STORE).get('purchasedWeaponIds');
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : null);
+    };
+    request.onerror = () => reject(request.error);
   });
 }

@@ -15,7 +15,7 @@ const Spells: React.FC = () => {
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between border-b border-gray-600 pb-1 mb-2 flex-shrink-0">
-        <h3 className="text-white text-lg font-bold">技能</h3>
+        <h3 className="text-white text-lg font-bold">技能<span className="text-gray-500 text-[10px] font-normal ml-1">鼠标悬浮查看详情</span></h3>
         <span className="text-sm text-gray-400">{learnedCount} / {skillCap}</span>
       </div>
       <div className="flex-1 overflow-y-auto min-h-0">

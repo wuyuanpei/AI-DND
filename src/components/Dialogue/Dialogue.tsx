@@ -3,17 +3,18 @@ import { useDialogueStore, getDMName, type DMPhase } from '../../store/dialogueS
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
-import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory } from '../../utils/playerDB';
+import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
-import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT } from '../../config/dmConfig';
+import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT, buildShopSystemPrompt } from '../../config/dmConfig';
 import { buildSystemPrompt } from '../../utils/dmPrompt';
 import { chatWithNPC } from '../../services/qwen';
 import { generateCharacterPortrait } from '../../services/imageGen';
 import { buildPortraitPrompt } from '../../config/imageConfig';
 import type { ChatMessage } from '../../services/qwen';
-import type { DialogueMessage } from '../../types';
+import type { DialogueMessage, Item } from '../../types';
 import type { CharacterData } from '../../store/playerStore';
 import { parseLLMJson } from '../../utils/parseLLMJson';
+import weaponsData from '../../data/weapons.json';
 
 const getBasePromptForDM = (phase: DMPhase): string => {
   switch (phase) {
@@ -30,6 +31,22 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
     return base;
   }
   return buildSystemPrompt(base);
+};
+
+const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>): string => {
+  const weapons = shopWeapons.map((w) => ({
+    id: w.id as string,
+    name: w.name as string,
+    weaponType: w.weaponType as 'melee' | 'ranged',
+    description: w.description as string,
+    rarity: w.rarity as string,
+    damage: w.damage as string,
+    durability: w.durability as number,
+    price: w.price as number,
+    effect: w.effect as string | undefined,
+    icon: w.icon as string,
+  }));
+  return buildSystemPrompt(buildShopSystemPrompt(weapons));
 };
 
 const dmPhaseToHistoryKey = (phase: DMPhase): string => {
@@ -107,9 +124,47 @@ const Dialogue: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // 商店阶段：初始化随机武器（优先从 IndexedDB 恢复 ID，再从 weapons.json 构建完整数据）
+  useEffect(() => {
+    if (store.dmPhase !== 'shop' || store.shopWeapons.length > 0) return;
+    (async () => {
+      const allWeapons = (weaponsData as { weapons: Array<Record<string, unknown>> }).weapons;
+      const savedIds = await loadShopWeaponIds();
+      if (savedIds && savedIds.length === 9) {
+        const idSet = new Set(savedIds);
+        const restored = allWeapons.filter((w) => idSet.has(w.id));
+        if (restored.length === 9) {
+          const purchasedIds = new Set((await loadPurchasedWeaponIds()) ?? []);
+          useDialogueStore.setState({ shopWeapons: restored, selectedWeaponIds: new Set(), purchasedWeaponIds: purchasedIds });
+          return;
+        }
+      }
+
+      const commonWeapons = allWeapons.filter((w) => w.rarity === 'common');
+
+      const melee = commonWeapons.filter((w) => w.weaponType === 'melee');
+      const ranged = commonWeapons.filter((w) => w.weaponType === 'ranged');
+
+      const shuffle = <T,>(arr: T[]): T[] => {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      };
+
+      const selected = [...shuffle(melee).slice(0, 6), ...shuffle(ranged).slice(0, 3)];
+      useDialogueStore.setState({ shopWeapons: selected, selectedWeaponIds: new Set(), purchasedWeaponIds: new Set() });
+      void saveShopWeaponIds(selected.map((w) => w.id)).catch(() => {});
+      void savePurchasedWeaponIds([]).catch(() => {});
+    })();
+  }, [store.dmPhase, store.shopWeapons.length]);
+
   // DM 自动发起首轮对话（角色创建问候或游戏开场）
   useEffect(() => {
     if (!restored) return;
+    if (store.dmPhase === 'shop') return; // 商店阶段由专用 useEffect 处理
     if (
       isOpen &&
       !isLoading &&
@@ -160,14 +215,9 @@ const Dialogue: React.FC = () => {
     setPendingCharacter(null);
     setGeneratingAvatars(false);
 
-    // 进入商店阶段，清空历史并主动打招呼
+    // 进入商店阶段，清空历史（武器初始化和问候由下方 useEffect 处理）
     useDialogueStore.setState({ dmPhase: 'shop', messages: [] });
     void saveDMPhase('shop').catch(() => {});
-    await sendToLLM(
-      getSystemPromptForDM('shop'),
-      '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
-      false
-    );
   };
 
   // 跳过头像选择
@@ -179,15 +229,20 @@ const Dialogue: React.FC = () => {
     writePlayerJsonToDB(state.name, state.gender ?? '', state.appearance ?? '', state.personality ?? '', state.backstory ?? '');
     savePlayerStatsToStorage();
 
-    // 进入商店阶段，清空历史并主动打招呼
+    // 进入商店阶段，清空历史（武器初始化和问候由下方 useEffect 处理）
     useDialogueStore.setState({ dmPhase: 'shop', messages: [] });
     void saveDMPhase('shop').catch(() => {});
-    await sendToLLM(
-      getSystemPromptForDM('shop'),
-      '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）',
-      false
-    );
   };
+
+  // 商店武器初始化后，自动发送问候
+  useEffect(() => {
+    if (store.dmPhase !== 'shop' || store.shopWeapons.length === 0) return;
+    if (!restored || isOpen === false) return;
+    if (messages.filter((m) => m.role !== 'system').length > 0) return;
+    const shopPrompt = getShopSystemPrompt(store.shopWeapons);
+    sendToLLM(shopPrompt, '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）', false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.dmPhase, store.shopWeapons.length, restored, isOpen]);
 
   // 核心 LLM 发送逻辑
   const sendToLLM = async (
@@ -251,8 +306,9 @@ const Dialogue: React.FC = () => {
       if (dmPhase === 'shop' && result.startAdventure) {
         addMessage({ role: 'assistant', content: replyContent });
 
-        useDialogueStore.setState({ dmPhase: 'adventure', messages: [] });
+        useDialogueStore.setState({ dmPhase: 'adventure', messages: [], shopWeapons: [], selectedWeaponIds: new Set(), purchasedWeaponIds: new Set() });
         void saveDMPhase('adventure').catch(() => {});
+        void saveShopWeaponIds([]).catch(() => {});
 
         await sendToLLM(
           getSystemPromptForDM('adventure'),
@@ -335,14 +391,19 @@ const Dialogue: React.FC = () => {
   // 处理 LLM 对话输入
   const handleLLMSubmit = async () => {
     if (!userInput.trim()) return;
-    const systemPrompt = getSystemPromptForDM(store.dmPhase);
+
+    const systemPrompt = store.dmPhase === 'shop'
+      ? getShopSystemPrompt(store.shopWeapons)
+      : getSystemPromptForDM(store.dmPhase);
     await sendToLLM(systemPrompt, userInput.trim(), true);
     setUserInput('');
   };
 
   // 处理选项点击
   const handleOptionClick = async (text: string) => {
-    const systemPrompt = getSystemPromptForDM(store.dmPhase);
+    const systemPrompt = store.dmPhase === 'shop'
+      ? getShopSystemPrompt(store.shopWeapons)
+      : getSystemPromptForDM(store.dmPhase);
     // 清除当前选项，防止重复点击
     setOptions([]);
     await sendToLLM(systemPrompt, text, true);
@@ -375,6 +436,131 @@ const Dialogue: React.FC = () => {
         {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
           <div className="space-y-3">
+            {/* 商店阶段：武器选择面板 */}
+            {store.dmPhase === 'shop' && store.shopWeapons.length > 0 && (
+              <div>
+                <div className="text-yellow-400 text-sm font-semibold mb-2">
+                  装备货架 — 选中后点击购买
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {store.shopWeapons.map((weapon) => {
+                    const gold = usePlayerStore.getState().gold;
+                    const isSelected = store.selectedWeaponIds.has(weapon.id);
+                    const isPurchased = store.purchasedWeaponIds.has(weapon.id);
+                    const selectedTotal = Array.from(store.selectedWeaponIds)
+                      .filter((id) => id !== weapon.id)
+                      .reduce((sum, id) => {
+                        const w = store.shopWeapons.find((x) => x.id === id);
+                        return sum + (w?.price ?? 0);
+                      }, 0);
+                    const canAfford = !isPurchased && gold >= selectedTotal + weapon.price;
+                    const isDisabled = isPurchased || !canAfford;
+                    return (
+                      <div
+                        key={weapon.id}
+                        className={`rounded-lg p-1.5 text-xs transition-all border ${
+                          isSelected
+                            ? 'border-blue-400 bg-blue-900/50 cursor-pointer'
+                            : isDisabled
+                              ? 'border-gray-600 bg-gray-800 opacity-50 cursor-not-allowed pointer-events-none'
+                              : 'border-gray-500 bg-gray-700 hover:border-gray-400 cursor-pointer'
+                        }`}
+                        onClick={() => {
+                          if (isDisabled) return;
+                          const ids = new Set(useDialogueStore.getState().selectedWeaponIds);
+                          if (ids.has(weapon.id)) ids.delete(weapon.id);
+                          else ids.add(weapon.id);
+                          useDialogueStore.setState({ selectedWeaponIds: ids });
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <img src={`/${weapon.icon}`} alt={weapon.name} className="w-5 h-5 object-contain" />
+                            <span className="text-white font-semibold truncate">{weapon.name}</span>
+                          </div>
+                          <span className="text-yellow-300 text-[11px] flex-shrink-0">{weapon.price} 金</span>
+                        </div>
+                        <div className="text-gray-300 text-[11px]">伤害: {weapon.damage}        持久度: {weapon.durability}</div>
+                        <div className="text-gray-400 mt-0.5 leading-tight line-clamp-2" style={{ fontSize: '10px' }}>{weapon.description}</div>
+                        {isPurchased && (
+                          <div className="text-green-400 text-[11px] font-semibold">已购买</div>
+                        )}
+                        {isSelected && !isPurchased && (
+                          <div className="text-blue-300 text-[11px] font-semibold">已选中</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 购买按钮 */}
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
+                      store.selectedWeaponIds.size > 0
+                        ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                        : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    }`}
+                    disabled={store.selectedWeaponIds.size === 0}
+                    onClick={() => {
+                      const totalPrice = Array.from(store.selectedWeaponIds).reduce((sum, id) => {
+                        const w = store.shopWeapons.find((x) => x.id === id);
+                        return sum + (w?.price ?? 0);
+                      }, 0);
+                      const currentGold = usePlayerStore.getState().gold;
+
+                      if (currentGold < totalPrice) return;
+
+                      const deductGold = usePlayerStore.getState().deductGold;
+                      const addItem = usePlayerStore.getState().addItem;
+                      const purchaseNames: string[] = [];
+
+                      for (const weaponId of store.selectedWeaponIds) {
+                        const preset = store.shopWeapons.find((w) => w.id === weaponId);
+                        if (!preset) continue;
+                        purchaseNames.push(preset.name);
+                        const item: Item = {
+                          id: preset.id,
+                          name: preset.name,
+                          type: preset.weaponType === 'melee' ? 'mainWeapon' : 'ranged',
+                          description: preset.description,
+                          rarity: preset.rarity,
+                          weaponType: preset.weaponType,
+                          damage: preset.damage,
+                          icon: preset.icon,
+                          price: preset.price,
+                          effect: preset.effect,
+                          durability: preset.durability,
+                          maxDurability: preset.durability,
+                        };
+                        addItem(item);
+                      }
+
+                      deductGold(totalPrice);
+                      const newPurchased = new Set(useDialogueStore.getState().purchasedWeaponIds);
+                      store.selectedWeaponIds.forEach((id) => newPurchased.add(id));
+                      useDialogueStore.setState({ selectedWeaponIds: new Set(), purchasedWeaponIds: newPurchased });
+                      void savePurchasedWeaponIds(Array.from(newPurchased)).catch(() => {});
+                      savePlayerStatsToStorage();
+
+                      const systemPrompt = getShopSystemPrompt(store.shopWeapons);
+                      const userMessage = `（我购买了 ${purchaseNames.join('、')}，共花费 ${totalPrice} 金币）`;
+                      void sendToLLM(systemPrompt, userMessage, true);
+                    }}
+                  >
+                    购买 {store.selectedWeaponIds.size > 0 ? `（${Array.from(store.selectedWeaponIds).reduce((sum, id) => {
+                      const w = store.shopWeapons.find((x) => x.id === id);
+                      return sum + (w?.price ?? 0);
+                    }, 0)} 金币）` : ''}
+                  </button>
+                  {store.selectedWeaponIds.size > 0 && (
+                    <span className="text-gray-400 text-xs">
+                      已选 {store.selectedWeaponIds.size} 件
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {messages
               .filter((m) => m.role !== 'system')
               .map((msg, idx) => (

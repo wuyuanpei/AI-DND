@@ -6,7 +6,9 @@
       "Bash(npx tsc *)",
       "Bash(python3 *)",
       "Bash(node scripts/generate-weapon-icons.mjs)",
-      "Bash(DASHSCOPE_API_KEY=test node scripts/generate-weapon-icons.mjs)"
+      "Bash(DASHSCOPE_API_KEY=test node scripts/generate-weapon-icons.mjs)",
+      "Bash(npx vite *)",
+      "Bash(curl -s http://localhost:5173)"
     ]
   }
 }
