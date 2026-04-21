@@ -351,13 +351,66 @@ const Dialogue: React.FC = () => {
       addApiUsage(response.usage);
       let replyContent = response.content;
 
-      const result = parseLLMJson(response.content);
-      if (result.dialogue) {
-        replyContent = result.dialogue.trim();
-      } else if (result.error) {
-        logError('DM JSON 响应解析失败', `${result.error}; 原始内容: ${response.content.slice(0, 500)}`);
+      let result = parseLLMJson(response.content);
+
+      // 检测 JSON 外是否有多余文本
+      const hasExtraText = (() => {
+        const content = response.content.trim();
+        // 去除 markdown 代码块后检查
+        const stripped = content.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+        try {
+          // 如果可以直接解析为 JSON，说明没有多余文本
+          JSON.parse(stripped);
+          return false;
+        } catch {
+          // 尝试修复后解析
+          const repaired = stripped
+            .replace(/,(\s*[}\]])/g, '$1')
+            .replace(/```/g, '');
+          try {
+            JSON.parse(repaired);
+            return false;
+          } catch {
+            // 检查是否有明显的非 JSON 文本（前后都有内容）
+            const firstBrace = stripped.indexOf('{');
+            const lastBrace = stripped.lastIndexOf('}');
+            if (firstBrace < 0 || lastBrace < 0) return true;
+            const before = stripped.substring(0, firstBrace).trim();
+            const after = stripped.substring(lastBrace + 1).trim();
+            return before.length > 10 || after.length > 10;
+          }
+        }
+      })();
+
+      // 解析失败或有多余文本时重试一次
+      if (!result.dialogue || result.error || hasExtraText) {
+        const errorParts: string[] = [];
+        if (result.error) errorParts.push(`JSON 解析错误: ${result.error}`);
+        if (!result.dialogue) errorParts.push('JSON 中缺少 dialogue 字段');
+        if (hasExtraText) errorParts.push('JSON 之外包含了其他文本，请严格只返回 JSON，不要任何额外内容');
+        const errorHint = errorParts.join('；');
+        logError('DM JSON 响应异常，重试', `${errorHint}; 原始内容: ${response.content.slice(0, 500)}`);
+
+        const retryMessage = `你的上一条回复格式有误，无法解析为 JSON。错误原因：${errorHint}。请严格只返回有效的 JSON`;
+        const retryResponse = await chatWithNPC(
+          'DM',
+          systemPrompt,
+          [...history, { role: 'user' as const, content: userMessage }, { role: 'assistant' as const, content: response.content }],
+          retryMessage,
+          apiKey,
+          model,
+          apiUrl
+        );
+        addApiUsage(retryResponse.usage);
+        replyContent = retryResponse.content;
+        result = parseLLMJson(retryResponse.content);
+        if (result.dialogue) {
+          replyContent = result.dialogue.trim();
+        } else {
+          logError('DM JSON 重试后仍然解析失败', `原始内容: ${retryResponse.content.slice(0, 500)}`);
+        }
       } else {
-        logError('DM JSON 响应缺少 dialogue 字段', `原始内容: ${response.content.slice(0, 500)}`);
+        replyContent = result.dialogue.trim();
       }
 
       // 提取 options
@@ -502,6 +555,36 @@ const Dialogue: React.FC = () => {
         return;
       }
 
+      // 冒险阶段：处理金币/经验奖励
+      let advRewardGold: number | undefined;
+      let advRewardExp: number | undefined;
+      let advDeductGold: number | undefined;
+      let leveledUp = false;
+      if (dmPhase === 'adventure') {
+        if (result.rewardGold !== undefined && result.rewardGold !== 0) {
+          const goldAmount = result.rewardGold;
+          if (goldAmount > 0) {
+            usePlayerStore.getState().addGold(goldAmount);
+          } else {
+            usePlayerStore.getState().deductGold(Math.abs(goldAmount));
+          }
+          advRewardGold = goldAmount;
+        }
+        if (result.deductGold !== undefined && result.deductGold > 0) {
+          usePlayerStore.getState().deductGold(result.deductGold);
+          advDeductGold = result.deductGold;
+        }
+        if (result.rewardExp !== undefined && result.rewardExp > 0) {
+          const beforeLevel = usePlayerStore.getState().level;
+          usePlayerStore.getState().addExp(result.rewardExp);
+          advRewardExp = result.rewardExp;
+          if (usePlayerStore.getState().level > beforeLevel) {
+            leveledUp = true;
+          }
+        }
+        savePlayerStatsToStorage();
+      }
+
       if (!currentPlayerIsCreated && result.character) {
         const char = result.character as Record<string, unknown>;
         if (
@@ -564,7 +647,7 @@ const Dialogue: React.FC = () => {
         }
       }
 
-      addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
+      addMessage({ role: 'assistant', content: replyContent, rawJson: response.content, rewardGold: advRewardGold, rewardExp: advRewardExp, deductGold: advDeductGold, leveledUp });
     } catch (error) {
       addMessage({ role: 'assistant', content: '（对话出错...）' });
     } finally {
@@ -852,15 +935,36 @@ const Dialogue: React.FC = () => {
             {messages
               .filter((m) => m.role !== 'system')
               .map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`p-3 rounded-lg max-w-[85%] break-words whitespace-pre-wrap ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 ml-auto'
-                      : 'bg-gray-600 mr-auto'
-                  }`}
-                >
-                  {renderBoldText(msg.content)}
+                <div key={idx}>
+                  <div
+                    className={`p-3 rounded-lg max-w-[85%] break-words whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-blue-600 ml-auto'
+                        : 'bg-gray-600 mr-auto'
+                    }`}
+                  >
+                    {renderBoldText(msg.content)}
+                  </div>
+                  {msg.rewardGold !== undefined && msg.rewardGold !== 0 && msg.rewardGold > 0 && (
+                    <div className="ml-1 mt-1">
+                      <span className="text-yellow-400 text-sm">（获得 {msg.rewardGold} 金币）</span>
+                    </div>
+                  )}
+                  {msg.deductGold !== undefined && msg.deductGold > 0 && (
+                    <div className="ml-1 mt-1">
+                      <span className="text-red-400 text-sm">（失去 {msg.deductGold} 金币）</span>
+                    </div>
+                  )}
+                  {msg.rewardExp !== undefined && msg.rewardExp > 0 && (
+                    <div className="ml-1 mt-1">
+                      <span className="text-purple-400 text-sm">（获得 {msg.rewardExp} 经验）</span>
+                    </div>
+                  )}
+                  {msg.leveledUp && (
+                    <div className="ml-1 mt-1">
+                      <span className="text-green-400 text-sm font-semibold">（升级！达到 Lv.{usePlayerStore.getState().level}）</span>
+                    </div>
+                  )}
                 </div>
               ))}
             {isLoading && (

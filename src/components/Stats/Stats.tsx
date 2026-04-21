@@ -1,13 +1,12 @@
 import React from 'react';
-import { usePlayerStore } from '../../store/playerStore';
+import { usePlayerStore, getExpToNext, MAX_LEVEL } from '../../store/playerStore';
 
 const Stats: React.FC = () => {
   const { name, level, hp, maxHp, mp, maxMp, exp, gold, strength, agility, intelligence, charisma, avatar } = usePlayerStore();
 
   const hpPercent = (hp / maxHp) * 100;
   const mpPercent = (mp / maxMp) * 100;
-  // 简单计算：每级 100exp，升级需要 level * 100 exp
-  const expToNextLevel = level * 100;
+  const expToNext = level >= MAX_LEVEL ? '已满级' : `${exp}/${getExpToNext(level)}`;
 
   return (
     <div className="flex flex-col">
@@ -29,7 +28,7 @@ const Stats: React.FC = () => {
       {/* 名字和等级 */}
       <div className="flex-shrink-0 text-center mb-2">
         <div className="text-white text-base font-bold">{name}</div>
-        <div className="text-yellow-400 text-sm">Lv.{level} (经验: {exp}/{expToNextLevel})</div>
+        <div className="text-yellow-400 text-sm">Lv.{level} (经验: {expToNext})</div>
       </div>
 
       {/* 血条 */}

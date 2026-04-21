@@ -17,6 +17,14 @@ export const getSkillCap = (level: number): number => {
   return Math.min(cap, BASE_SKILL_SLOTS + (MAX_LEVEL - 1)); // 最多 12 个
 };
 
+/**
+ * 计算从当前等级升到下一级所需的经验值
+ * 1→2: 100, 2→3: 200, 3→4: 400, ... (每级翻倍)
+ */
+export const getExpToNext = (level: number): number => {
+  return 100 * Math.pow(2, level - 1);
+};
+
 export interface CharacterData {
   name: string;
   strength: number;
@@ -64,6 +72,7 @@ export interface PlayerState {
   heal: (amount: number) => void;
   addGold: (amount: number) => void;
   deductGold: (amount: number) => void;
+  addExp: (amount: number) => void;
   addItem: (item: Item, slot?: number) => void;
   removeItem: (slot: number) => void;
   equipItem: (item: Item, slot: number) => void;
@@ -140,6 +149,44 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   deductGold: (amount) => set((state) => ({
     gold: Math.max(0, state.gold - amount)
   })),
+  addExp: (amount) => set((state) => {
+    if (state.level >= MAX_LEVEL) {
+      // 已满级，经验只积累但不升级
+      return { exp: state.exp + amount };
+    }
+
+    let newExp = state.exp + amount;
+    let newLevel = state.level;
+    let newMaxHp = state.maxHp;
+    let newMaxMp = state.maxMp;
+    let newHp = state.hp;
+    let newMp = state.mp;
+
+    while (newLevel < MAX_LEVEL && newExp >= getExpToNext(newLevel)) {
+      newExp -= getExpToNext(newLevel);
+      newLevel += 1;
+
+      // 升级后重新计算 HP/MP
+      const baseMaxHp = 10 * state.strength + 5 * state.agility;
+      const baseMaxMp = 10 * state.intelligence;
+      // 装备提供的加成需要保留
+      const equipmentMaxHp = state.maxHp - baseMaxHp;
+      newMaxHp = baseMaxHp + equipmentMaxHp;
+      newMaxMp = baseMaxMp;
+      // 升级时 HP/MP 回满
+      newHp = newMaxHp;
+      newMp = newMaxMp;
+    }
+
+    return {
+      level: newLevel,
+      exp: newExp,
+      maxHp: newMaxHp,
+      maxMp: newMaxMp,
+      hp: newHp,
+      mp: newMp,
+    };
+  }),
   addItem: (item, slot) => {
     if (slot !== undefined) {
       set((state) => ({

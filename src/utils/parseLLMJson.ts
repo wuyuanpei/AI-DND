@@ -5,6 +5,9 @@ export interface ParseLLMJsonResult {
   buy?: string[];
   character?: unknown;
   startAdventure?: boolean;
+  rewardGold?: number;
+  rewardExp?: number;
+  deductGold?: number;
   error?: string;
 }
 
@@ -260,6 +263,9 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
       buy: parseOptions(parsed.buy),
       character: parsed.character,
       startAdventure: parsed.startAdventure === true,
+      rewardGold: typeof parsed.rewardGold === 'number' ? parsed.rewardGold : undefined,
+      rewardExp: typeof parsed.rewardExp === 'number' ? parsed.rewardExp : undefined,
+      deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
     };
   } catch {
     // ignore, try repair
@@ -280,6 +286,9 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
       buy: parseOptions(parsed.buy),
       character: parsed.character,
       startAdventure: parsed.startAdventure === true,
+      rewardGold: typeof parsed.rewardGold === 'number' ? parsed.rewardGold : undefined,
+      rewardExp: typeof parsed.rewardExp === 'number' ? parsed.rewardExp : undefined,
+      deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
     };
   } catch (e) {
     // Fallback: extract fields with regex, or use raw string as dialogue

@@ -83,6 +83,10 @@ export interface DialogueMessage {
   role: 'system' | 'user' | 'assistant' | 'npc';
   content: string;
   rawJson?: string; // 完整 LLM 返回 JSON
+  rewardGold?: number;
+  rewardExp?: number;
+  deductGold?: number;
+  leveledUp?: boolean;
 }
 
 export interface DialogueChoice {
