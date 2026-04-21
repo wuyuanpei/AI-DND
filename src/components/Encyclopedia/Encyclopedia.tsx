@@ -56,7 +56,7 @@ const armorTypeName: Record<string, string> = {
 
 const Encyclopedia: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabId>('all');
+  const [activeTab, setActiveTab] = useState<TabId>('melee');
 
   const isMonsterTab = activeTab === 'monster';
 

@@ -546,10 +546,11 @@ const Dialogue: React.FC = () => {
         void savePurchasedArmorIds(Array.from(newPurchasedA)).catch(() => {});
         savePlayerStatsToStorage();
 
+        const { gold } = usePlayerStore.getState();
         addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
         await sendToLLM(
           getShopSystemPrompt(store.shopWeapons, store.shopArmors, newPurchasedW, newPurchasedA),
-          `（系统：已成功购买 ${purchasedNames.join('、')}，共花费 ${totalPrice} 金币）`,
+          `（系统：已成功购买 ${purchasedNames.join('、')}，共花费 ${totalPrice} 金币，剩余 ${gold} 金币）`,
           true
         );
         return;
@@ -898,6 +899,7 @@ const Dialogue: React.FC = () => {
                       }
 
                       deductGold(totalPrice);
+                      const { gold } = usePlayerStore.getState();
                       const newPurchasedW = new Set(useDialogueStore.getState().purchasedWeaponIds);
                       const newPurchasedA = new Set(useDialogueStore.getState().purchasedArmorIds);
                       store.selectedWeaponIds.forEach((id) => newPurchasedW.add(id));
@@ -908,7 +910,7 @@ const Dialogue: React.FC = () => {
                       savePlayerStatsToStorage();
 
                       const systemPrompt = getShopSystemPrompt(store.shopWeapons, store.shopArmors, newPurchasedW, newPurchasedA);
-                      const userMessage = `（我购买了 ${purchaseNames.join('、')}，共花费 ${totalPrice} 金币）`;
+                      const userMessage = `（系统：已成功购买 ${purchaseNames.join('、')}，共花费 ${totalPrice} 金币，剩余 ${gold} 金币）`;
                       void sendToLLM(systemPrompt, userMessage, true);
                     }}
                   >

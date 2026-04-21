@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 const CONFIG = {
   apiKey: process.env.DASHSCOPE_API_KEY,
   apiUrl: process.env.DASHSCOPE_API_URL || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
-  model: 'qwen-image-2.0',
+  model: 'qwen-image-2.0-pro',
   iconSize: parseInt(process.env.ICON_SIZE, 10) || 512,
   gridSize: parseInt(process.env.GRID_SIZE, 10) || 1536,
   outputDir: process.env.OUTPUT_DIR || path.resolve(__dirname, '../public/armors'),

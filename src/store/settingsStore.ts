@@ -12,7 +12,7 @@ const IMAGE_API_KEY_STORAGE_KEY = 'ai-dnd-image-api-key';
 const IMAGE_MODEL_STORAGE_KEY = 'ai-dnd-image-model';
 
 export const IMAGE_API_URL = '/api/image-gen';
-export const IMAGE_MODEL = 'qwen-image-2.0';
+export const IMAGE_MODEL = 'qwen-image-2.0-pro';
 
 export type Provider = 'qwen' | 'deepseek';
 
@@ -53,7 +53,11 @@ const getStoredImageApiKey = (): string | null => {
 
 const getStoredImageModel = (): string => {
   try {
-    return localStorage.getItem(IMAGE_MODEL_STORAGE_KEY) || IMAGE_MODEL;
+    const stored = localStorage.getItem(IMAGE_MODEL_STORAGE_KEY);
+    if (stored) return stored;
+    // 默认值写入 localStorage
+    localStorage.setItem(IMAGE_MODEL_STORAGE_KEY, IMAGE_MODEL);
+    return IMAGE_MODEL;
   } catch {
     return IMAGE_MODEL;
   }

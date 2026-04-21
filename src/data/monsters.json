@@ -17,13 +17,13 @@
                 {
                     "name": "黏液喷溅",
                     "description": "喷出一团腐蚀性黏液，对目标造成酸性伤害。",
-                    "damage": "1d4+2",
+                    "damage": "1d8+4",
                     "rangeType": "ranged"
                 },
                 {
                     "name": "包裹缠绕",
                     "description": "用凝胶状的身体包裹目标，造成持续挤压伤害。",
-                    "damage": "1d6+3",
+                    "damage": "2d6+5",
                     "rangeType": "melee"
                 }
             ],
@@ -46,19 +46,19 @@
                 {
                     "name": "偷袭击打",
                     "description": "从暗处发起突袭，用粗糙的武器猛击目标要害。",
-                    "damage": "2d4+5",
+                    "damage": "2d8+8",
                     "rangeType": "melee"
                 },
                 {
                     "name": "投掷石块",
                     "description": "捡起地上的石块用力掷向敌人。",
-                    "damage": "1d6+3",
+                    "damage": "1d12+6",
                     "rangeType": "ranged"
                 },
                 {
                     "name": "群体围攻",
                     "description": "呼叫附近的同伴一起围攻目标，造成多段伤害。",
-                    "damage": "1d8+4",
+                    "damage": "4d4+6",
                     "rangeType": "melee"
                 }
             ],
@@ -81,12 +81,12 @@
                 {
                     "name": "亡灵斩击",
                     "description": "用锈蚀的武器发起沉重的斩击，附带亡灵之力。",
-                    "damage": "2d6+5",
+                    "damage": "2d12+10",
                     "rangeType": "melee"
                 },
                 {
                     "name": "骨盾",
-                    "description": "召唤周围的碎骨形成临时护盾，提升自身防御，不造成伤害。",
+                    "description": "召唤周围的碎骨形成临时护盾，之后两个回合防御+10",
                     "damage": "0",
                     "rangeType": "melee"
                 }
@@ -110,13 +110,13 @@
                 {
                     "name": "撕咬",
                     "description": "用锋利的牙齿猛咬目标，造成撕裂伤害。",
-                    "damage": "1d8+4",
+                    "damage": "2d8+8",
                     "rangeType": "melee"
                 },
                 {
                     "name": "扑击",
                     "description": "高速冲刺扑向目标，利用冲击力将敌人撞倒。",
-                    "damage": "2d6+5",
+                    "damage": "2d12+5",
                     "rangeType": "melee"
                 }
             ],
@@ -144,14 +144,14 @@
                 },
                 {
                     "name": "蛛网喷射",
-                    "description": "从腹部喷射出粘性蛛丝，缠绕目标使其无法移动。",
+                    "description": "从腹部喷射出粘性蛛丝，缠绕目标使其之后两个回合无法移动。",
                     "damage": "0",
                     "rangeType": "ranged"
                 },
                 {
                     "name": "毒液喷射",
                     "description": "远距离喷射腐蚀性毒液。",
-                    "damage": "1d6+2",
+                    "damage": "1d6+6",
                     "rangeType": "ranged"
                 }
             ],
@@ -174,13 +174,13 @@
                 {
                     "name": "蛮力劈砍",
                     "description": "用武器全力劈砍，势大力沉但破绽较大。",
-                    "damage": "2d4+4",
+                    "damage": "2d8+8",
                     "rangeType": "melee"
                 },
                 {
                     "name": "投掷飞刀",
                     "description": "从腰间抽出飞刀掷向远处的目标。",
-                    "damage": "1d6+3",
+                    "damage": "2d6+6",
                     "rangeType": "ranged"
                 }
             ],
@@ -203,13 +203,13 @@
                 {
                     "name": "孢子云雾",
                     "description": "释放大片致幻孢子云雾，使目标陷入混乱和眩晕。",
-                    "damage": "1d4+1",
+                    "damage": "2d4+2",
                     "rangeType": "ranged"
                 },
                 {
                     "name": "菌丝鞭打",
                     "description": "伸出长长的菌丝如鞭子一般抽打目标。",
-                    "damage": "1d6+2",
+                    "damage": "2d6+4",
                     "rangeType": "melee"
                 }
             ],
@@ -232,13 +232,13 @@
                 {
                     "name": "群体啃咬",
                     "description": "无数巨鼠一拥而上，对目标造成多段啃咬伤害。",
-                    "damage": "1d6",
+                    "damage": "5d4",
                     "rangeType": "melee"
                 },
                 {
                     "name": "鼠潮涌动",
                     "description": "鼠群如洪水般涌过目标，造成冲击伤害并有可能击退。",
-                    "damage": "1d4+1",
+                    "damage": "3d4+4",
                     "rangeType": "melee"
                 }
             ],
@@ -261,19 +261,13 @@
                 {
                     "name": "俯冲利爪",
                     "description": "从高空俯冲而下，用锋利的双爪撕裂目标。",
-                    "damage": "1d8+3",
+                    "damage": "3d8+6",
                     "rangeType": "melee"
-                },
-                {
-                    "name": "迷魂歌声",
-                    "description": "唱出令人迷醉的歌声，使目标陷入迷惑并降低防御。",
-                    "damage": "0",
-                    "rangeType": "ranged"
                 },
                 {
                     "name": "旋风羽翼",
                     "description": "快速旋转双翼产生强烈气流，将目标击退。",
-                    "damage": "1d6+3",
+                    "damage": "3d6+6",
                     "rangeType": "ranged"
                 }
             ],
