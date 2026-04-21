@@ -7,6 +7,9 @@ const LOGS_STORE = 'gameLogs';
 const DIALOGUE_STORE = 'dialogueHistory';
 const SHOP_STORE = 'shopWeapons';
 
+// Armor shop store
+const SHOP_ARMOR_STORE = 'shopArmors';
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -23,6 +26,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(SHOP_STORE)) {
         db.createObjectStore(SHOP_STORE);
+      }
+      if (!db.objectStoreNames.contains(SHOP_ARMOR_STORE)) {
+        db.createObjectStore(SHOP_ARMOR_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -262,5 +268,65 @@ export async function loadPurchasedWeaponIds(): Promise<string[] | null> {
       resolve(Array.isArray(result) ? result : null);
     };
     request.onerror = () => reject(request.error);
+  });
+}
+
+// Shop armor IDs persistence
+export async function saveShopArmorIds(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_ARMOR_STORE, 'readwrite');
+    tx.objectStore(SHOP_ARMOR_STORE).put(ids, 'armorIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadShopArmorIds(): Promise<string[] | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_ARMOR_STORE, 'readonly');
+    const request = tx.objectStore(SHOP_ARMOR_STORE).get('armorIds');
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : null);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function savePurchasedArmorIds(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_ARMOR_STORE, 'readwrite');
+    tx.objectStore(SHOP_ARMOR_STORE).put(ids, 'purchasedArmorIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadPurchasedArmorIds(): Promise<string[] | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(SHOP_ARMOR_STORE, 'readonly');
+    const request = tx.objectStore(SHOP_ARMOR_STORE).get('purchasedArmorIds');
+    request.onsuccess = () => {
+      const result = request.result;
+      resolve(Array.isArray(result) ? result : null);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function clearShopData(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([SHOP_STORE, SHOP_ARMOR_STORE], 'readwrite');
+    tx.objectStore(SHOP_STORE).delete('weaponIds');
+    tx.objectStore(SHOP_STORE).delete('purchasedWeaponIds');
+    tx.objectStore(SHOP_ARMOR_STORE).delete('armorIds');
+    tx.objectStore(SHOP_ARMOR_STORE).delete('purchasedArmorIds');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }

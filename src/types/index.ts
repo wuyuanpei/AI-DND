@@ -52,6 +52,23 @@ export interface WeaponPreset {
   icon: string;
 }
 
+// 防具预设（来自 armors.json 的静态数据）
+// 与 Item 的区别：不含 type 字段，装备时由前端根据 armorType 补充 type
+export interface ArmorPreset {
+  id: string;
+  name: string;
+  armorType: 'helmet' | 'chest' | 'shield';
+  description: string;
+  rarity: Rarity;
+  defense?: number;       // 盾牌防御值
+  damageReduction?: number; // 头盔伤害减免百分比 (0.1 = 10%)
+  bonusHp?: number;       // 护甲额外生命值
+  durability: number;
+  price: number;
+  effect?: string;
+  icon: string;
+}
+
 export interface Skill {
   id: string;
   name: string;
@@ -65,6 +82,7 @@ export interface Skill {
 export interface DialogueMessage {
   role: 'system' | 'user' | 'assistant' | 'npc';
   content: string;
+  rawJson?: string; // 完整 LLM 返回 JSON
 }
 
 export interface DialogueChoice {

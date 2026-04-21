@@ -3,7 +3,7 @@ import { useDialogueStore, getDMName, type DMPhase } from '../../store/dialogueS
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
-import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds } from '../../utils/playerDB';
+import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds, saveShopArmorIds, loadShopArmorIds, savePurchasedArmorIds, loadPurchasedArmorIds, clearShopData } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
 import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT, buildShopSystemPrompt } from '../../config/dmConfig';
 import { buildSystemPrompt } from '../../utils/dmPrompt';
@@ -15,6 +15,7 @@ import type { DialogueMessage, Item } from '../../types';
 import type { CharacterData } from '../../store/playerStore';
 import { parseLLMJson } from '../../utils/parseLLMJson';
 import weaponsData from '../../data/weapons.json';
+import armorsData from '../../data/armors.json';
 
 const getBasePromptForDM = (phase: DMPhase): string => {
   switch (phase) {
@@ -33,7 +34,7 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
   return buildSystemPrompt(base);
 };
 
-const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, purchasedIds: Set<string>): string => {
+const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, shopArmors: Array<Record<string, unknown>>, purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
   const weapons = shopWeapons.map((w) => ({
     id: w.id as string,
     name: w.name as string,
@@ -46,7 +47,21 @@ const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, purcha
     effect: w.effect as string | undefined,
     icon: w.icon as string,
   }));
-  return buildSystemPrompt(buildShopSystemPrompt(weapons, purchasedIds));
+  const armors = shopArmors.map((a) => ({
+    id: a.id as string,
+    name: a.name as string,
+    armorType: a.armorType as 'helmet' | 'chest' | 'shield',
+    description: a.description as string,
+    rarity: a.rarity as string,
+    defense: a.defense as number | undefined,
+    damageReduction: a.damageReduction as number | undefined,
+    bonusHp: a.bonusHp as number | undefined,
+    durability: a.durability as number,
+    price: a.price as number,
+    effect: a.effect as string | undefined,
+    icon: a.icon as string,
+  }));
+  return buildSystemPrompt(buildShopSystemPrompt(weapons, armors, purchasedWeaponIds, purchasedArmorIds));
 };
 
 const dmPhaseToHistoryKey = (phase: DMPhase): string => {
@@ -107,6 +122,17 @@ const Dialogue: React.FC = () => {
       useDialogueStore.setState({ dmPhase: phase });
       if (history && history.length > 0) {
         useDialogueStore.setState({ messages: history });
+        // 恢复最后一个 assistant 消息的 options
+        for (let i = history.length - 1; i >= 0; i--) {
+          const msg = history[i];
+          if (msg.role === 'assistant' && msg.rawJson) {
+            const parsed = parseLLMJson(msg.rawJson);
+            if (parsed.options) {
+              setOptions(parsed.options);
+            }
+            break;
+          }
+        }
       }
       setRestored(true);
     })();
@@ -124,27 +150,45 @@ const Dialogue: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // 商店阶段：初始化随机武器（优先从 IndexedDB 恢复 ID，再从 weapons.json 构建完整数据）
+  // 商店阶段：初始化随机武器和防具（优先从 IndexedDB 恢复 ID，再从 JSON 构建完整数据）
   useEffect(() => {
-    if (store.dmPhase !== 'shop' || store.shopWeapons.length > 0) return;
+    if (store.dmPhase !== 'shop' || (store.shopWeapons.length > 0 && store.shopArmors.length > 0)) return;
     (async () => {
       const allWeapons = (weaponsData as { weapons: Array<Record<string, unknown>> }).weapons;
-      const savedIds = await loadShopWeaponIds();
-      if (savedIds && savedIds.length === 9) {
-        const idSet = new Set(savedIds);
-        const restored = allWeapons.filter((w) => idSet.has(w.id));
-        if (restored.length === 9) {
-          const purchasedIds = new Set((await loadPurchasedWeaponIds()) ?? []);
-          useDialogueStore.setState({ shopWeapons: restored, selectedWeaponIds: new Set(), purchasedWeaponIds: purchasedIds });
-          return;
+      const allArmors = (armorsData as { armors: Array<Record<string, unknown>> }).armors;
+
+      // 恢复武器
+      const savedWeaponIds = await loadShopWeaponIds();
+      let restoredWeapons: Array<Record<string, unknown>> = [];
+      if (savedWeaponIds && savedWeaponIds.length === 9) {
+        const idSet = new Set(savedWeaponIds);
+        restoredWeapons = allWeapons.filter((w) => idSet.has(w.id));
+        if (restoredWeapons.length === 9) {
+          // 武器恢复成功
         }
       }
 
-      const commonWeapons = allWeapons.filter((w) => w.rarity === 'common');
+      if (restoredWeapons.length === 0) {
+        const commonWeapons = allWeapons.filter((w) => w.rarity === 'common');
+        const melee = commonWeapons.filter((w) => w.weaponType === 'melee');
+        const ranged = commonWeapons.filter((w) => w.weaponType === 'ranged');
+        const shuffle = <T,>(arr: T[]): T[] => {
+          const a = [...arr];
+          for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+          }
+          return a;
+        };
+        restoredWeapons = [...shuffle(melee).slice(0, 6), ...shuffle(ranged).slice(0, 3)];
+        void saveShopWeaponIds(restoredWeapons.map((w) => w.id)).catch(() => {});
+      }
 
-      const melee = commonWeapons.filter((w) => w.weaponType === 'melee');
-      const ranged = commonWeapons.filter((w) => w.weaponType === 'ranged');
-
+      // 恢复/生成防具 (3 头盔 + 3 护甲 + 3 盾牌)
+      const commonArmors = allArmors.filter((a) => a.rarity === 'common');
+      const helmets = commonArmors.filter((a) => a.armorType === 'helmet');
+      const chests = commonArmors.filter((a) => a.armorType === 'chest');
+      const shields = commonArmors.filter((a) => a.armorType === 'shield');
       const shuffle = <T,>(arr: T[]): T[] => {
         const a = [...arr];
         for (let i = a.length - 1; i > 0; i--) {
@@ -154,12 +198,34 @@ const Dialogue: React.FC = () => {
         return a;
       };
 
-      const selected = [...shuffle(melee).slice(0, 6), ...shuffle(ranged).slice(0, 3)];
-      useDialogueStore.setState({ shopWeapons: selected, selectedWeaponIds: new Set(), purchasedWeaponIds: new Set() });
-      void saveShopWeaponIds(selected.map((w) => w.id)).catch(() => {});
-      void savePurchasedWeaponIds([]).catch(() => {});
+      const savedArmorIds = await loadShopArmorIds();
+      let restoredArmors: Array<Record<string, unknown>> = [];
+      if (savedArmorIds && savedArmorIds.length === 9) {
+        const armorIdSet = new Set(savedArmorIds);
+        restoredArmors = allArmors.filter((a) => armorIdSet.has(a.id));
+      }
+      if (restoredArmors.length === 9) {
+        // 防具恢复成功
+      } else {
+        restoredArmors = [...shuffle(helmets).slice(0, 3), ...shuffle(chests).slice(0, 3), ...shuffle(shields).slice(0, 3)];
+        void saveShopArmorIds(restoredArmors.map((a) => a.id)).catch(() => {});
+      }
+      const selectedArmors = restoredArmors;
+
+      // 恢复已购买 ID
+      const savedPurchasedWeaponIds = new Set((await loadPurchasedWeaponIds()) ?? []);
+      const savedPurchasedArmorIds = new Set((await loadPurchasedArmorIds()) ?? []);
+
+      useDialogueStore.setState({
+        shopWeapons: restoredWeapons,
+        shopArmors: selectedArmors,
+        selectedWeaponIds: new Set(),
+        selectedArmorIds: new Set(),
+        purchasedWeaponIds: savedPurchasedWeaponIds,
+        purchasedArmorIds: savedPurchasedArmorIds,
+      });
     })();
-  }, [store.dmPhase, store.shopWeapons.length]);
+  }, [store.dmPhase, store.shopWeapons.length, store.shopArmors.length]);
 
   // DM 自动发起首轮对话（角色创建问候或游戏开场）
   useEffect(() => {
@@ -234,15 +300,15 @@ const Dialogue: React.FC = () => {
     void saveDMPhase('shop').catch(() => {});
   };
 
-  // 商店武器初始化后，自动发送问候
+  // 商店武器和防具初始化后，自动发送问候
   useEffect(() => {
-    if (store.dmPhase !== 'shop' || store.shopWeapons.length === 0) return;
+    if (store.dmPhase !== 'shop' || store.shopWeapons.length === 0 || store.shopArmors.length === 0) return;
     if (!restored || isOpen === false) return;
     if (messages.filter((m) => m.role !== 'system').length > 0) return;
-    const shopPrompt = getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds);
+    const shopPrompt = getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds);
     sendToLLM(shopPrompt, '（玩家刚刚创建完角色并进入商店，请主动向玩家打招呼并开启对话。）', false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store.dmPhase, store.shopWeapons.length, restored, isOpen]);
+  }, [store.dmPhase, store.shopWeapons.length, store.shopArmors.length, restored, isOpen]);
 
   // 核心 LLM 发送逻辑
   const sendToLLM = async (
@@ -270,7 +336,7 @@ const Dialogue: React.FC = () => {
     try {
       const history: ChatMessage[] = historyMessages.map((m) => ({
         role: m.role === 'npc' ? 'assistant' : m.role,
-        content: m.content,
+        content: m.role === 'assistant' && m.rawJson ? m.rawJson : m.content,
       }));
 
       const response = await chatWithNPC(
@@ -304,16 +370,134 @@ const Dialogue: React.FC = () => {
       // 商店阶段 → 冒险阶段
       const dmPhase = useDialogueStore.getState().dmPhase;
       if (dmPhase === 'shop' && result.startAdventure) {
-        addMessage({ role: 'assistant', content: replyContent });
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
 
-        useDialogueStore.setState({ dmPhase: 'adventure', messages: [], shopWeapons: [], selectedWeaponIds: new Set(), purchasedWeaponIds: new Set() });
+        useDialogueStore.setState({ dmPhase: 'adventure', messages: [], shopWeapons: [], selectedWeaponIds: new Set(), purchasedWeaponIds: new Set(), shopArmors: [], selectedArmorIds: new Set(), purchasedArmorIds: new Set() });
         void saveDMPhase('adventure').catch(() => {});
-        void saveShopWeaponIds([]).catch(() => {});
+        void clearShopData().catch(() => {});
 
         await sendToLLM(
           getSystemPromptForDM('adventure'),
           '（玩家已完成购物准备开始冒险，请主动向玩家打招呼并开启新的冒险旅程。）',
           false
+        );
+        return;
+      }
+
+      // 商店阶段 → LLM 返回 buy 字段，处理购买
+      if (dmPhase === 'shop' && result.buy && Array.isArray(result.buy)) {
+        const buyIds = result.buy as string[];
+        const shopWeapons = useDialogueStore.getState().shopWeapons;
+        const shopArmors = useDialogueStore.getState().shopArmors;
+        const purchasedWIds = useDialogueStore.getState().purchasedWeaponIds;
+        const purchasedAIds = useDialogueStore.getState().purchasedArmorIds;
+        const playerGold = usePlayerStore.getState().gold;
+
+        // 验证所有要购买的装备
+        const validWeapons: Array<{ w: Record<string, unknown>; price: number }> = [];
+        const validArmors: Array<{ a: Record<string, unknown>; price: number }> = [];
+        let totalPrice = 0;
+        let failedReason = '';
+
+        for (const id of buyIds) {
+          const weapon = shopWeapons.find((w) => w.id === id);
+          if (weapon) {
+            if (purchasedWIds.has(id)) {
+              failedReason = `装备 "${weapon.name}" 已售罄`;
+              break;
+            }
+            const price = weapon.price as number;
+            totalPrice += price;
+            validWeapons.push({ w: weapon, price });
+            continue;
+          }
+          const armor = shopArmors.find((a) => a.id === id);
+          if (armor) {
+            if (purchasedAIds.has(id)) {
+              failedReason = `装备 "${armor.name}" 已售罄`;
+              break;
+            }
+            const price = armor.price as number;
+            totalPrice += price;
+            validArmors.push({ a: armor, price });
+            continue;
+          }
+          failedReason = `装备 "${id}" 不存在`;
+          break;
+        }
+
+        if (!failedReason && totalPrice > playerGold) {
+          failedReason = `金币不足，总价 ${totalPrice} 金币，玩家当前金币 ${playerGold}`;
+        }
+
+        if (failedReason) {
+          addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
+          await sendToLLM(
+            getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds),
+            `（系统提示：无法购买。${failedReason}。）`,
+            false
+          );
+          return;
+        }
+
+        // 执行批量购买
+        usePlayerStore.getState().deductGold(totalPrice);
+        const purchasedNames: string[] = [];
+        const newPurchasedW = new Set(purchasedWIds);
+        const newPurchasedA = new Set(purchasedAIds);
+
+        for (const { w, price } of validWeapons) {
+          const item: Item = {
+            id: w.id,
+            name: w.name as string,
+            type: (w.weaponType === 'melee' ? 'mainWeapon' : 'ranged') as Item['type'],
+            description: w.description as string,
+            rarity: w.rarity as string,
+            weaponType: w.weaponType as 'melee' | 'ranged',
+            damage: w.damage as string,
+            durability: w.durability as number,
+            maxDurability: w.durability as number,
+            price,
+            effect: w.effect as string | undefined,
+            icon: w.icon as string,
+          };
+          usePlayerStore.getState().addItem(item);
+          newPurchasedW.add(w.id);
+          purchasedNames.push(w.name as string);
+        }
+
+        for (const { a, price } of validArmors) {
+          const type = a.armorType === 'helmet' ? 'helmet' : a.armorType === 'chest' ? 'chest' : 'shield';
+          const item: Item = {
+            id: a.id,
+            name: a.name as string,
+            type: type as Item['type'],
+            description: a.description as string,
+            rarity: a.rarity as string,
+            damageReduction: a.damageReduction as number | undefined,
+            bonusHp: a.bonusHp as number | undefined,
+            defense: a.defense as number | undefined,
+            durability: a.durability as number,
+            maxDurability: a.durability as number,
+            price,
+            effect: a.effect as string | undefined,
+            icon: a.icon as string,
+          };
+          usePlayerStore.getState().addItem(item);
+          newPurchasedA.add(a.id);
+          purchasedNames.push(a.name as string);
+        }
+
+        useDialogueStore.setState({ purchasedWeaponIds: newPurchasedW, purchasedArmorIds: newPurchasedA });
+        void savePurchasedWeaponIds(Array.from(newPurchasedW)).catch(() => {});
+        void savePurchasedArmorIds(Array.from(newPurchasedA)).catch(() => {});
+        savePlayerStatsToStorage();
+
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
+        await sendToLLM(
+          getShopSystemPrompt(store.shopWeapons, store.shopArmors, newPurchasedW, newPurchasedA),
+          `（系统：已成功购买 ${purchasedNames.join('、')}，共花费 ${totalPrice} 金币）`,
+          true
         );
         return;
       }
@@ -342,7 +526,7 @@ const Dialogue: React.FC = () => {
           // 代码层校验：四维属性之和必须为 50
           const attrSum = characterData.strength + characterData.agility + characterData.intelligence + characterData.charisma;
           if (attrSum !== 50) {
-            addMessage({ role: 'assistant', content: replyContent });
+            addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
             await sendToLLM(
               systemPrompt,
               `(系统提示：当前角色四维属性之和为${attrSum}，不等于50。请提示玩家修改属性分配，使力量、敏捷、智力、魅力之和恰好为50，每项仍须在8-16之间，然后重新给出角色预览等待玩家确认。)`,
@@ -352,7 +536,7 @@ const Dialogue: React.FC = () => {
           }
 
           // 属性校验通过，先创建角色并写入记忆，再进入头像生成流程
-          addMessage({ role: 'assistant', content: replyContent });
+          addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
           writePlayerMemoryAndCreateCharacter(characterData);
 
           setPendingCharacter(characterData);
@@ -380,7 +564,7 @@ const Dialogue: React.FC = () => {
         }
       }
 
-      addMessage({ role: 'assistant', content: replyContent });
+      addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
     } catch (error) {
       addMessage({ role: 'assistant', content: '（对话出错...）' });
     } finally {
@@ -393,7 +577,7 @@ const Dialogue: React.FC = () => {
     if (!userInput.trim()) return;
 
     const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds)
+      ? getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds)
       : getSystemPromptForDM(store.dmPhase);
     await sendToLLM(systemPrompt, userInput.trim(), true);
     setUserInput('');
@@ -402,7 +586,7 @@ const Dialogue: React.FC = () => {
   // 处理选项点击
   const handleOptionClick = async (text: string) => {
     const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds)
+      ? getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds)
       : getSystemPromptForDM(store.dmPhase);
     // 清除当前选项，防止重复点击
     setOptions([]);
@@ -436,8 +620,8 @@ const Dialogue: React.FC = () => {
         {/* LLM 模式：显示对话历史 */}
         {mode === 'llm' && (
           <div className="space-y-3">
-            {/* 商店阶段：武器选择面板 */}
-            {store.dmPhase === 'shop' && store.shopWeapons.length > 0 && (
+            {/* 商店阶段：装备选择面板（武器 + 防具） */}
+            {store.dmPhase === 'shop' && (store.shopWeapons.length > 0 || store.shopArmors.length > 0) && (
               <div>
                 <div className="text-yellow-400 text-sm font-semibold mb-2">
                   装备货架 — 选中后点击购买
@@ -452,6 +636,11 @@ const Dialogue: React.FC = () => {
                       .reduce((sum, id) => {
                         const w = store.shopWeapons.find((x) => x.id === id);
                         return sum + (w?.price ?? 0);
+                      }, 0) +
+                      Array.from(store.selectedArmorIds)
+                      .reduce((sum, id) => {
+                        const a = store.shopArmors.find((x) => x.id === id);
+                        return sum + (a?.price ?? 0);
                       }, 0);
                     const canAfford = !isPurchased && gold >= selectedTotal + weapon.price;
                     const isDisabled = isPurchased || !canAfford;
@@ -480,10 +669,72 @@ const Dialogue: React.FC = () => {
                           </div>
                           <span className="text-yellow-300 text-[11px] flex-shrink-0">{weapon.price} 金</span>
                         </div>
-                        <div className="text-gray-300 text-[11px]">伤害: {weapon.damage}        持久度: {weapon.durability}</div>
+                        <div className="text-gray-300 text-[11px]">{weapon.weaponType === 'melee' ? '近战' : '远程'} 伤害: {weapon.damage}  持久: {weapon.durability}</div>
                         <div className="text-gray-400 mt-0.5 leading-tight line-clamp-2" style={{ fontSize: '10px' }}>{weapon.description}</div>
                         {isPurchased && (
-                          <div className="text-green-400 text-[11px] font-semibold">已购买</div>
+                          <div className="text-green-400 text-[11px] font-semibold">已卖完</div>
+                        )}
+                        {isSelected && !isPurchased && (
+                          <div className="text-blue-300 text-[11px] font-semibold">已选中</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {store.shopArmors.map((armor) => {
+                    const gold = usePlayerStore.getState().gold;
+                    const isSelected = store.selectedArmorIds.has(armor.id);
+                    const isPurchased = store.purchasedArmorIds.has(armor.id);
+                    const selectedTotal = Array.from(store.selectedWeaponIds)
+                      .reduce((sum, id) => {
+                        const w = store.shopWeapons.find((x) => x.id === id);
+                        return sum + (w?.price ?? 0);
+                      }, 0) +
+                      Array.from(store.selectedArmorIds)
+                      .filter((id) => id !== armor.id)
+                      .reduce((sum, id) => {
+                        const a = store.shopArmors.find((x) => x.id === id);
+                        return sum + (a?.price ?? 0);
+                      }, 0);
+                    const canAfford = !isPurchased && gold >= selectedTotal + armor.price;
+                    const isDisabled = isPurchased || !canAfford;
+                    const typeLabel = armor.armorType === 'helmet' ? '头盔' : armor.armorType === 'chest' ? '护甲' : '盾牌';
+                    let statText = '';
+                    if (armor.armorType === 'helmet') {
+                      statText = `减伤 ${Math.round((armor.damageReduction ?? 0) * 100)}%  持久 ${armor.durability}`;
+                    } else if (armor.armorType === 'chest') {
+                      statText = `生命 +${armor.bonusHp ?? 0}`;
+                    } else {
+                      statText = `防御 ${armor.defense ?? 0}  持久 ${armor.durability}`;
+                    }
+                    return (
+                      <div
+                        key={armor.id}
+                        className={`rounded-lg p-1.5 text-xs transition-all border ${
+                          isSelected
+                            ? 'border-blue-400 bg-blue-900/50 cursor-pointer'
+                            : isDisabled
+                              ? 'border-gray-600 bg-gray-800 opacity-50 cursor-not-allowed pointer-events-none'
+                              : 'border-gray-500 bg-gray-700 hover:border-gray-400 cursor-pointer'
+                        }`}
+                        onClick={() => {
+                          if (isDisabled) return;
+                          const ids = new Set(useDialogueStore.getState().selectedArmorIds);
+                          if (ids.has(armor.id)) ids.delete(armor.id);
+                          else ids.add(armor.id);
+                          useDialogueStore.setState({ selectedArmorIds: ids });
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <img src={`/${armor.icon}`} alt={armor.name} className="w-5 h-5 object-contain" />
+                            <span className="text-white font-semibold truncate">{armor.name}</span>
+                          </div>
+                          <span className="text-yellow-300 text-[11px] flex-shrink-0">{armor.price} 金</span>
+                        </div>
+                        <div className="text-gray-300 text-[11px]">{typeLabel}  {statText}</div>
+                        <div className="text-gray-400 mt-0.5 leading-tight line-clamp-2" style={{ fontSize: '10px' }}>{armor.description}</div>
+                        {isPurchased && (
+                          <div className="text-green-400 text-[11px] font-semibold">已卖完</div>
                         )}
                         {isSelected && !isPurchased && (
                           <div className="text-blue-300 text-[11px] font-semibold">已选中</div>
@@ -496,16 +747,21 @@ const Dialogue: React.FC = () => {
                 <div className="mt-3 flex items-center gap-3">
                   <button
                     className={`px-4 py-2 rounded text-sm font-semibold transition-colors ${
-                      store.selectedWeaponIds.size > 0
+                      store.selectedWeaponIds.size + store.selectedArmorIds.size > 0
                         ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                         : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     }`}
-                    disabled={store.selectedWeaponIds.size === 0}
+                    disabled={store.selectedWeaponIds.size + store.selectedArmorIds.size === 0}
                     onClick={() => {
-                      const totalPrice = Array.from(store.selectedWeaponIds).reduce((sum, id) => {
-                        const w = store.shopWeapons.find((x) => x.id === id);
-                        return sum + (w?.price ?? 0);
-                      }, 0);
+                      const totalPrice =
+                        Array.from(store.selectedWeaponIds).reduce((sum, id) => {
+                          const w = store.shopWeapons.find((x) => x.id === id);
+                          return sum + (w?.price ?? 0);
+                        }, 0) +
+                        Array.from(store.selectedArmorIds).reduce((sum, id) => {
+                          const a = store.shopArmors.find((x) => x.id === id);
+                          return sum + (a?.price ?? 0);
+                        }, 0);
                       const currentGold = usePlayerStore.getState().gold;
 
                       if (currentGold < totalPrice) return;
@@ -535,26 +791,58 @@ const Dialogue: React.FC = () => {
                         addItem(item);
                       }
 
+                      for (const armorId of store.selectedArmorIds) {
+                        const preset = store.shopArmors.find((a) => a.id === armorId);
+                        if (!preset) continue;
+                        purchaseNames.push(preset.name);
+                        const type = preset.armorType === 'helmet' ? 'helmet' : preset.armorType === 'chest' ? 'chest' : 'shield';
+                        const item: Item = {
+                          id: preset.id,
+                          name: preset.name,
+                          type: type as Item['type'],
+                          description: preset.description,
+                          rarity: preset.rarity,
+                          damageReduction: preset.damageReduction,
+                          bonusHp: preset.bonusHp,
+                          defense: preset.defense,
+                          durability: preset.durability,
+                          maxDurability: preset.durability,
+                          price: preset.price,
+                          effect: preset.effect,
+                          icon: preset.icon,
+                        };
+                        addItem(item);
+                      }
+
                       deductGold(totalPrice);
-                      const newPurchased = new Set(useDialogueStore.getState().purchasedWeaponIds);
-                      store.selectedWeaponIds.forEach((id) => newPurchased.add(id));
-                      useDialogueStore.setState({ selectedWeaponIds: new Set(), purchasedWeaponIds: newPurchased });
-                      void savePurchasedWeaponIds(Array.from(newPurchased)).catch(() => {});
+                      const newPurchasedW = new Set(useDialogueStore.getState().purchasedWeaponIds);
+                      const newPurchasedA = new Set(useDialogueStore.getState().purchasedArmorIds);
+                      store.selectedWeaponIds.forEach((id) => newPurchasedW.add(id));
+                      store.selectedArmorIds.forEach((id) => newPurchasedA.add(id));
+                      useDialogueStore.setState({ selectedWeaponIds: new Set(), selectedArmorIds: new Set(), purchasedWeaponIds: newPurchasedW, purchasedArmorIds: newPurchasedA });
+                      void savePurchasedWeaponIds(Array.from(newPurchasedW)).catch(() => {});
+                      void savePurchasedArmorIds(Array.from(newPurchasedA)).catch(() => {});
                       savePlayerStatsToStorage();
 
-                      const systemPrompt = getShopSystemPrompt(store.shopWeapons, store.purchasedWeaponIds);
+                      const systemPrompt = getShopSystemPrompt(store.shopWeapons, store.shopArmors, newPurchasedW, newPurchasedA);
                       const userMessage = `（我购买了 ${purchaseNames.join('、')}，共花费 ${totalPrice} 金币）`;
                       void sendToLLM(systemPrompt, userMessage, true);
                     }}
                   >
-                    购买 {store.selectedWeaponIds.size > 0 ? `（${Array.from(store.selectedWeaponIds).reduce((sum, id) => {
-                      const w = store.shopWeapons.find((x) => x.id === id);
-                      return sum + (w?.price ?? 0);
-                    }, 0)} 金币）` : ''}
+                    购买 {store.selectedWeaponIds.size + store.selectedArmorIds.size > 0 ? `（${
+                        Array.from(store.selectedWeaponIds).reduce((sum, id) => {
+                          const w = store.shopWeapons.find((x) => x.id === id);
+                          return sum + (w?.price ?? 0);
+                        }, 0) +
+                        Array.from(store.selectedArmorIds).reduce((sum, id) => {
+                          const a = store.shopArmors.find((x) => x.id === id);
+                          return sum + (a?.price ?? 0);
+                        }, 0)
+                    } 金币）` : ''}
                   </button>
-                  {store.selectedWeaponIds.size > 0 && (
+                  {store.selectedWeaponIds.size + store.selectedArmorIds.size > 0 && (
                     <span className="text-gray-400 text-xs">
-                      已选 {store.selectedWeaponIds.size} 件
+                      已选 {store.selectedWeaponIds.size + store.selectedArmorIds.size} 件
                     </span>
                   )}
                 </div>

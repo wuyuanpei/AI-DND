@@ -71,7 +71,7 @@ const Inventory: React.FC = () => {
     }
   }, [hoveredSlot, updateTooltipPosition]);
 
-  const handleEquip = (slot: number, equipType: 'mainWeapon' | 'offWeapon' | 'ranged') => {
+  const handleEquip = (slot: number, equipType: 'mainWeapon' | 'offWeapon' | 'ranged' | 'helmet' | 'chest' | 'shield') => {
     const item = inventory[slot];
     if (!item) return;
     const itemCopy: Item = { ...item, type: equipType };
@@ -152,6 +152,39 @@ const Inventory: React.FC = () => {
                       <span className="absolute bottom-0 right-0 text-[11px] text-white font-bold bg-black/90 rounded px-0.5 leading-tight shadow">
                         x{count}
                       </span>
+                      {(() => {
+                        const isMelee = item.weaponType === 'melee';
+                        const isRanged = item.weaponType === 'ranged';
+                        if (isMelee || isRanged) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-red-800/90 text-red-100 rounded px-0.5 leading-tight shadow">
+                              ⚔{item.damage}
+                            </span>
+                          );
+                        }
+                        if (item.type === 'helmet' && item.damageReduction !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-amber-800/90 text-amber-100 rounded px-0.5 leading-tight shadow">
+                              🛡{Math.round(item.damageReduction * 100)}%
+                            </span>
+                          );
+                        }
+                        if (item.type === 'chest' && item.bonusHp !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-green-800/90 text-green-100 rounded px-0.5 leading-tight shadow">
+                              ❤{item.bonusHp}
+                            </span>
+                          );
+                        }
+                        if (item.type === 'shield' && item.defense !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-blue-800/90 text-blue-100 rounded px-0.5 leading-tight shadow">
+                              🛡{item.defense}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   ) : (
                     <span className="text-gray-400 text-lg">?</span>
@@ -170,6 +203,11 @@ const Inventory: React.FC = () => {
         if (!item) return null;
         const isMelee = item.weaponType === 'melee';
         const isRanged = item.weaponType === 'ranged';
+        const isHelmet = item.type === 'helmet';
+        const isChest = item.type === 'chest';
+        const isShield = item.type === 'shield';
+        const isArmor = isHelmet || isChest || isShield;
+        const typeLabel = isMelee ? '近战武器' : isRanged ? '远程武器' : isHelmet ? '头盔' : isChest ? '护甲' : isShield ? '盾牌' : '护甲';
         return (
           <div
             ref={tooltipRef}
@@ -188,9 +226,12 @@ const Inventory: React.FC = () => {
             </div>
             {item.description && <div className="text-gray-300 text-xs mb-1.5">{item.description}</div>}
             <div className="text-gray-400 text-xs space-y-0.5">
+              <div>类型: {typeLabel}</div>
               {item.damage && <div>伤害: {item.damage}</div>}
+              {item.damageReduction !== undefined && <div>伤害减免: {Math.round(item.damageReduction * 100)}%</div>}
+              {item.bonusHp !== undefined && <div>额外生命: +{item.bonusHp}</div>}
+              {item.defense !== undefined && <div>防御: {item.defense}</div>}
               {item.durability !== undefined && <div>持久度: {item.durability} / {item.maxDurability ?? item.durability}</div>}
-              {item.weaponType && <div>类型: {isMelee ? '近战武器' : '远程武器'}</div>}
               {item.effect && <div className="text-green-400">特效: {item.effect}</div>}
               {item.price !== undefined && <div>价格: {item.price} 金币（出售价 {Math.floor(item.price * 0.6)} 金币）</div>}
             </div>
@@ -220,6 +261,36 @@ const Inventory: React.FC = () => {
                     装备远程
                   </button>
                 )}
+              </div>
+            )}
+            {isHelmet && (
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <button
+                  className="w-full bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                  onClick={() => handleEquip(hoveredSlot, 'helmet')}
+                >
+                  装备头盔
+                </button>
+              </div>
+            )}
+            {isChest && (
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <button
+                  className="w-full bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                  onClick={() => handleEquip(hoveredSlot, 'chest')}
+                >
+                  装备护甲
+                </button>
+              </div>
+            )}
+            {isShield && (
+              <div className="mt-2 pt-2 border-t border-gray-700">
+                <button
+                  className="w-full bg-blue-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors cursor-pointer"
+                  onClick={() => handleEquip(hoveredSlot, 'shield')}
+                >
+                  装备盾牌
+                </button>
               </div>
             )}
           </div>

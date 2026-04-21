@@ -1,0 +1,301 @@
+{
+    "armors": [
+        {
+            "id": "leather_helmet",
+            "name": "皮盔",
+            "armorType": "helmet",
+            "rarity": "common",
+            "description": "鞣制皮革制成的轻便头盔，能提供基础的头部防护。",
+            "damageReduction": 0.20,
+            "durability": 80,
+            "price": 120,
+            "icon": "armors/leather_helmet.png"
+        },
+        {
+            "id": "iron_helm",
+            "name": "铁头盔",
+            "armorType": "helmet",
+            "rarity": "common",
+            "description": "标准铁制头盔，重量适中，是士兵最常见的防护装备。",
+            "damageReduction": 0.24,
+            "durability": 100,
+            "price": 180,
+            "icon": "armors/iron_helm.png"
+        },
+        {
+            "id": "steel_helm",
+            "name": "钢盔",
+            "armorType": "helmet",
+            "rarity": "common",
+            "description": "精钢打造的全覆式头盔，防护面积大，视野稍受限制。",
+            "damageReduction": 0.22,
+            "durability": 120,
+            "price": 200,
+            "icon": "armors/steel_helm.png"
+        },
+        {
+            "id": "bronze_helm",
+            "name": "青铜盔",
+            "armorType": "helmet",
+            "rarity": "common",
+            "description": "青铜铸造的圆顶头盔，造型古朴，防护能力尚可。",
+            "damageReduction": 0.18,
+            "durability": 90,
+            "price": 150,
+            "icon": "armors/bronze_helm.png"
+        },
+        {
+            "id": "chainmail_coif",
+            "name": "锁子头巾",
+            "armorType": "helmet",
+            "rarity": "common",
+            "description": "金属环编织的链甲头巾，柔软贴合，对切割伤害有不错的防御。",
+            "damageReduction": 0.26,
+            "durability": 110,
+            "price": 170,
+            "icon": "armors/chainmail_coif.png"
+        },
+        {
+            "id": "knight_helm",
+            "name": "骑士头盔",
+            "armorType": "helmet",
+            "rarity": "rare",
+            "description": "骑士团标配的全覆式头盔，面甲可抬起，防护与视野兼顾。",
+            "damageReduction": 0.4,
+            "durability": 160,
+            "price": 550,
+            "icon": "armors/knight_helm.png"
+        },
+        {
+            "id": "elven_circlet",
+            "name": "精灵头环",
+            "armorType": "helmet",
+            "rarity": "rare",
+            "description": "精灵工匠用秘银与月光石打造的精致头环，轻盈如羽，魔力充盈。",
+            "damageReduction": 0.44,
+            "durability": 140,
+            "price": 700,
+            "effect": "魔力加持，提升感知能力，闪避率+8%",
+            "icon": "armors/elven_circlet.png"
+        },
+        {
+            "id": "rune_helm",
+            "name": "符文头盔",
+            "armorType": "helmet",
+            "rarity": "rare",
+            "description": "盔顶刻有防护符文的铁盔，能偏转部分魔法攻击。",
+            "damageReduction": 0.36,
+            "durability": 180,
+            "price": 620,
+            "effect": "符文护盾，受到的魔法伤害降低15%",
+            "icon": "armors/rune_helm.png"
+        },
+        {
+            "id": "crown_of_wisdom",
+            "name": "智慧之冠",
+            "armorType": "helmet",
+            "rarity": "epic",
+            "description": "传说中的远古王冠，镶嵌着一颗散发微光的智慧宝石，佩戴者思维清晰如镜。",
+            "damageReduction": 0.6,
+            "durability": 220,
+            "price": 3000,
+            "effect": "智慧之光，免疫精神控制与恐惧效果，魔法抗性+25%",
+            "icon": "armors/crown_of_wisdom.png"
+        },
+        {
+            "id": "leather_armor",
+            "name": "皮甲",
+            "armorType": "chest",
+            "rarity": "common",
+            "description": "多层皮革缝制的简易护甲，轻便灵活，适合冒险初期穿着。",
+            "bonusHp": 50,
+            "price": 100,
+            "icon": "armors/leather_armor.png"
+        },
+        {
+            "id": "chainmail_armor",
+            "name": "锁子甲",
+            "armorType": "chest",
+            "rarity": "common",
+            "description": "金属环环相扣的链甲，对刀箭切割有良好防护，但无法抵御钝击。",
+            "bonusHp": 60,
+            "price": 120,
+            "icon": "armors/chainmail_armor.png"
+        },
+        {
+            "id": "iron_plate",
+            "name": "铁板甲",
+            "armorType": "chest",
+            "rarity": "common",
+            "description": "铁板铆接的重型护甲，防护面积大，但行动稍显笨重。",
+            "bonusHp": 55,
+            "price": 110,
+            "icon": "armors/iron_plate.png"
+        },
+        {
+            "id": "studded_leather",
+            "name": "铆钉皮甲",
+            "armorType": "chest",
+            "rarity": "common",
+            "description": "皮革上铆接铁片的混合护甲，兼顾灵活性与防护力。",
+            "bonusHp": 45,
+            "price": 90,
+            "icon": "armors/studded_leather.png"
+        },
+        {
+            "id": "cloth_robe",
+            "name": "布袍",
+            "armorType": "chest",
+            "rarity": "common",
+            "description": "厚实的棉麻长袍，几乎不提供物理防护，但适合施法者穿着。",
+            "bonusHp": 40,
+            "price": 80,
+            "icon": "armors/cloth_robe.png"
+        },
+        {
+            "id": "steel_plate",
+            "name": "精钢板甲",
+            "armorType": "chest",
+            "rarity": "rare",
+            "description": "百炼精钢打造的重型板甲，关节处设计精巧，不影响活动自由度。",
+            "bonusHp": 120,
+            "price": 250,
+            "icon": "armors/steel_plate.png"
+        },
+        {
+            "id": "elven_robe",
+            "name": "精灵法袍",
+            "armorType": "chest",
+            "rarity": "rare",
+            "description": "精灵用魔法丝绸编织的长袍，轻盈飘逸，能吸收部分魔法冲击。",
+            "bonusHp": 100,
+            "price": 230,
+            "effect": "魔法吸收，受到的元素伤害降低20%",
+            "icon": "armors/elven_robe.png"
+        },
+        {
+            "id": "rune_chestplate",
+            "name": "符文胸甲",
+            "armorType": "chest",
+            "rarity": "rare",
+            "description": "胸前铭刻防御符文的板甲，符文在受击时会短暂发光。",
+            "bonusHp": 130,
+            "price": 300,
+            "effect": "符文激活时，短时间内免疫下一次致命伤害",
+            "icon": "armors/rune_chestplate.png"
+        },
+        {
+            "id": "dragonscale_armor",
+            "name": "龙鳞甲",
+            "armorType": "chest",
+            "rarity": "epic",
+            "description": "以远古巨龙脱落的鳞片缝制而成的传说护甲，每一片鳞都坚逾精钢，散发着灼热的气息。",
+            "bonusHp": 400,
+            "price": 3000,
+            "effect": "龙鳞护体，火焰免疫，受到的物理伤害降低30%",
+            "icon": "armors/dragonscale_armor.png"
+        },
+        {
+            "id": "wooden_shield",
+            "name": "木盾",
+            "armorType": "shield",
+            "rarity": "common",
+            "description": "橡木制成的圆盾，表面包有铁皮，是最基础的防御工具。",
+            "defense": 15,
+            "durability": 70,
+            "price": 100,
+            "icon": "armors/wooden_shield.png"
+        },
+        {
+            "id": "iron_shield",
+            "name": "铁盾",
+            "armorType": "shield",
+            "rarity": "common",
+            "description": "铁制方盾，重心稳固，能有效格挡正面攻击。",
+            "defense": 17,
+            "durability": 100,
+            "price": 180,
+            "icon": "armors/iron_shield.png"
+        },
+        {
+            "id": "kite_shield",
+            "name": "鸢形盾",
+            "armorType": "shield",
+            "rarity": "common",
+            "description": "上宽下窄的鸢形盾，适合骑兵和步兵使用，防护面积大。",
+            "defense": 18,
+            "durability": 110,
+            "price": 200,
+            "icon": "armors/kite_shield.png"
+        },
+        {
+            "id": "tower_shield",
+            "name": "塔盾",
+            "armorType": "shield",
+            "rarity": "common",
+            "description": "巨大的塔式盾牌，几乎能遮住整个身体，但举盾速度较慢。",
+            "defense": 20,
+            "durability": 130,
+            "price": 260,
+            "icon": "armors/tower_shield.png"
+        },
+        {
+            "id": "buckler",
+            "name": "小圆盾",
+            "armorType": "shield",
+            "rarity": "common",
+            "description": "小型圆盾，轻便灵活，适合单手配合武器使用。",
+            "defense": 15,
+            "durability": 80,
+            "price": 120,
+            "icon": "armors/buckler.png"
+        },
+        {
+            "id": "steel_shield",
+            "name": "精钢盾",
+            "armorType": "shield",
+            "rarity": "rare",
+            "description": "精钢锻造的重盾，表面抛光如镜，能反弹部分光线干扰敌人。",
+            "defense": 25,
+            "durability": 180,
+            "price": 600,
+            "icon": "armors/steel_shield.png"
+        },
+        {
+            "id": "rune_shield",
+            "name": "符文盾",
+            "armorType": "shield",
+            "rarity": "rare",
+            "description": "盾面镶嵌符文的塔盾，受击时符文会释放能量波推开敌人。",
+            "defense": 27,
+            "durability": 200,
+            "price": 750,
+            "effect": "完美格挡时释放冲击波，将攻击者击退并眩晕1秒",
+            "icon": "armors/rune_shield.png"
+        },
+        {
+            "id": "silver_shield",
+            "name": "银纹盾",
+            "armorType": "shield",
+            "rarity": "rare",
+            "description": "盾面刻有银色纹章的圆盾，散发着净化邪异的光芒。",
+            "defense": 24,
+            "durability": 170,
+            "price": 580,
+            "effect": "对黑暗生物和亡灵造成的伤害提升15%",
+            "icon": "armors/silver_shield.png"
+        },
+        {
+            "id": "aegis",
+            "name": "神盾埃癸斯",
+            "armorType": "shield",
+            "rarity": "epic",
+            "description": "神话中宙斯所持的神盾，盾面镶嵌着美杜莎之首，凝视者无不胆寒。它是守护与威严的化身。",
+            "defense": 35,
+            "durability": 300,
+            "price": 5000,
+            "effect": "神盾庇护，格挡率提升40%，免疫恐惧和眩晕效果",
+            "icon": "armors/aegis.png"
+        }
+    ]
+}

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-icons": "node scripts/generate-weapon-icons.mjs"
+    "generate-icons": "node scripts/generate-weapon-icons.mjs",
+    "generate-armor-icons": "node scripts/generate-armor-icons.mjs"
   },
   "dependencies": {
     "js-yaml": "^4.1.1",

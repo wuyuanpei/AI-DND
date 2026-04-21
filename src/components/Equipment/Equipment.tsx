@@ -128,6 +128,39 @@ const Equipment: React.FC = () => {
                       ) : (
                         <span className="text-gray-400 text-xs">{label}</span>
                       )}
+                      {(() => {
+                        const isMelee = item.weaponType === 'melee';
+                        const isRanged = item.weaponType === 'ranged';
+                        if (isMelee || isRanged) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-red-800/90 text-red-100 rounded px-0.5 leading-tight shadow">
+                              ⚔{item.damage}
+                            </span>
+                          );
+                        }
+                        if (item.type === 'helmet' && item.damageReduction !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-amber-800/90 text-amber-100 rounded px-0.5 leading-tight shadow">
+                              🛡{Math.round(item.damageReduction * 100)}%
+                            </span>
+                          );
+                        }
+                        if (item.type === 'chest' && item.bonusHp !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-green-800/90 text-green-100 rounded px-0.5 leading-tight shadow">
+                              ❤{item.bonusHp}
+                            </span>
+                          );
+                        }
+                        if (item.type === 'shield' && item.defense !== undefined) {
+                          return (
+                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-blue-800/90 text-blue-100 rounded px-0.5 leading-tight shadow">
+                              🛡{item.defense}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                       {item.durability !== undefined && (
                         <span className="absolute bottom-0 right-0 text-[10px] text-white font-bold bg-black/90 rounded px-0.5 leading-tight shadow">
                           {item.durability}
@@ -151,7 +184,10 @@ const Equipment: React.FC = () => {
         if (!item) return null;
         const isMelee = item.weaponType === 'melee';
         const isRanged = item.weaponType === 'ranged';
-        const typeLabel = isMelee ? '近战武器' : isRanged ? '远程武器' : '护甲';
+        const isHelmet = item.type === 'helmet';
+        const isChest = item.type === 'chest';
+        const isShield = item.type === 'shield';
+        const typeLabel = isMelee ? '近战武器' : isRanged ? '远程武器' : isHelmet ? '头盔' : isChest ? '护甲' : isShield ? '盾牌' : '护甲';
         return (
           <div
             ref={tooltipRef}
@@ -172,6 +208,9 @@ const Equipment: React.FC = () => {
             <div className="text-gray-400 text-xs space-y-0.5">
               <div>类型: {typeLabel}</div>
               {item.damage && <div>伤害: {item.damage}</div>}
+              {item.damageReduction !== undefined && <div>伤害减免: {Math.round(item.damageReduction * 100)}%</div>}
+              {item.bonusHp !== undefined && <div>额外生命: +{item.bonusHp}</div>}
+              {item.defense !== undefined && <div>防御: {item.defense}</div>}
               {item.durability !== undefined && <div>持久度: {item.durability} / {item.maxDurability ?? item.durability}</div>}
               {item.effect && <div className="text-green-400">特效: {item.effect}</div>}
               {item.price !== undefined && <div>价格: {item.price} 金币（出售价 {Math.floor(item.price * 0.6)} 金币）</div>}

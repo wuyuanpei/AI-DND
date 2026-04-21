@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DialogueMessage, DialogueNode, WeaponPreset } from '../types';
+import type { DialogueMessage, DialogueNode, WeaponPreset, ArmorPreset } from '../types';
 
 export type DMPhase = 'creation' | 'shop' | 'adventure';
 
@@ -23,6 +23,10 @@ interface DialogueState {
   shopWeapons: WeaponPreset[];
   selectedWeaponIds: Set<string>;
   purchasedWeaponIds: Set<string>;
+  // 商店阶段防具选择
+  shopArmors: ArmorPreset[];
+  selectedArmorIds: Set<string>;
+  purchasedArmorIds: Set<string>;
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
@@ -48,6 +52,9 @@ const initialDialogueState = {
   shopWeapons: [] as WeaponPreset[],
   selectedWeaponIds: new Set<string>(),
   purchasedWeaponIds: new Set<string>(),
+  shopArmors: [] as ArmorPreset[],
+  selectedArmorIds: new Set<string>(),
+  purchasedArmorIds: new Set<string>(),
 };
 
 export const useDialogueStore = create<DialogueState>((set) => ({
