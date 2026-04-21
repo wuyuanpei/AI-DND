@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import weaponsData from '../../data/weapons.json';
 import armorsData from '../../data/armors.json';
-import type { Rarity, WeaponPreset, ArmorPreset } from '../../types';
+import monstersData from '../../data/monsters.json';
+import type { Rarity, WeaponPreset, ArmorPreset, Monster } from '../../types';
 import { RARITY_LABELS } from '../../types';
 
 const weapons = weaponsData.weapons as WeaponPreset[];
 const armors = armorsData.armors as ArmorPreset[];
+const monsters = monstersData.monsters as Monster[];
 
 const rarityNameColors: Record<Rarity, string> = {
   common: 'text-gray-300',
@@ -36,12 +38,12 @@ const RARITY_ORDER: Record<Rarity, number> = {
 };
 
 const tabs = [
-  { id: 'all', label: '全部' },
   { id: 'melee', label: '近战' },
   { id: 'ranged', label: '远程' },
   { id: 'helmet', label: '头盔' },
   { id: 'chest', label: '护甲' },
   { id: 'shield', label: '盾牌' },
+  { id: 'monster', label: '怪物' },
 ] as const;
 
 type TabId = typeof tabs[number]['id'];
@@ -56,6 +58,8 @@ const Encyclopedia: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('all');
 
+  const isMonsterTab = activeTab === 'monster';
+
   const allItems = [
     ...weapons.map((w) => ({ ...w, category: w.weaponType as string })),
     ...armors.map((a) => ({ ...a, category: a.armorType as string })),
@@ -63,7 +67,6 @@ const Encyclopedia: React.FC = () => {
 
   const filtered = allItems
     .filter((item) => {
-      if (activeTab === 'all') return true;
       return item.category === activeTab;
     })
     .sort((a, b) => {
@@ -71,6 +74,14 @@ const Encyclopedia: React.FC = () => {
       if (rDiff !== 0) return rDiff;
       return a.price - b.price;
     });
+
+  const filteredMonsters = activeTab === 'monster'
+    ? [...monsters].sort((a, b) => {
+        const rDiff = RARITY_ORDER[a.rarity] - RARITY_ORDER[b.rarity];
+        if (rDiff !== 0) return rDiff;
+        return a.hp - b.hp;
+      })
+    : [];
 
   return (
     <>
@@ -92,7 +103,7 @@ const Encyclopedia: React.FC = () => {
           >
             {/* 头部 */}
             <div className="flex items-center justify-between p-4 border-b border-gray-600 flex-shrink-0">
-              <div className="text-white font-bold text-xl">装备图鉴</div>
+              <div className="text-white font-bold text-xl">{isMonsterTab ? '怪物图鉴' : '装备图鉴'}</div>
               <button
                 className="text-gray-400 hover:text-white text-xl leading-none"
                 onClick={() => setIsOpen(false)}
@@ -120,8 +131,90 @@ const Encyclopedia: React.FC = () => {
 
             {/* 内容区 */}
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <div className="grid grid-cols-2 gap-4">
-                {filtered.map((item) => {
+              {isMonsterTab ? (
+                filteredMonsters.length > 0 ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {filteredMonsters.map((monster) => (
+                    <div
+                      key={monster.id}
+                      className={`bg-gray-700 rounded-lg p-4 flex gap-4 border ${rarityBorderColors[monster.rarity]} hover:bg-gray-650 transition-colors`}
+                    >
+                      {/* 图标 */}
+                      <div className="w-20 h-20 flex-shrink-0 rounded overflow-hidden border border-gray-500 bg-gray-600">
+                        <img
+                          src={`/${monster.icon}`}
+                          alt={monster.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            target.style.display = 'none';
+                            const parent = target.parentElement;
+                            if (parent) {
+                              parent.innerHTML = '<span class="flex items-center justify-center w-full h-full text-gray-400 text-xs text-center">暂无<br/>图片</span>';
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* 信息 */}
+                      <div className="flex-1 min-w-0">
+                        {/* 名称 + 稀有度 */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`font-bold text-base ${rarityNameColors[monster.rarity]}`}>
+                            {monster.name}
+                          </span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${rarityBadgeColors[monster.rarity]}`}>
+                            {RARITY_LABELS[monster.rarity]}
+                          </span>
+                        </div>
+
+                        {/* 属性 */}
+                        <div className="text-sm text-gray-300 space-x-3 mb-1.5">
+                          <span>❤️ HP <span className="text-red-400 font-medium">{monster.hp}</span></span>
+                          <span>🛡️ 防御 <span className="text-blue-400 font-medium">{monster.defense}</span></span>
+                          <span>📜 经验 <span className="text-green-400 font-medium">{monster.expReward}</span></span>
+                        </div>
+                        <div className="text-sm text-gray-300 space-x-3 mb-1.5">
+                          <span>💪 力量 <span className="text-orange-400 font-medium">{monster.strength}</span></span>
+                          <span>⚡ 敏捷 <span className="text-green-400 font-medium">{monster.agility}</span></span>
+                          <span>🧠 智力 <span className="text-purple-400 font-medium">{monster.intelligence}</span></span>
+                          <span>✨ 魅力 <span className="text-yellow-400 font-medium">{monster.charisma}</span></span>
+                        </div>
+
+                        {/* 描述 */}
+                        <div className="text-sm text-gray-400 leading-relaxed mb-2">
+                          {monster.description}
+                        </div>
+
+                        {/* 技能 */}
+                        {monster.skills.length > 0 && (
+                          <div className="space-y-1">
+                            {monster.skills.map((skill, idx) => (
+                              <div key={idx} className="text-xs bg-gray-800 rounded px-2 py-1.5 border border-gray-600">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-yellow-300 font-medium">{skill.name}</span>
+                                  <span className={`text-xs px-1 rounded ${skill.rangeType === 'melee' ? 'bg-red-900/40 text-red-300' : 'bg-blue-900/40 text-blue-300'}`}>
+                                    {skill.rangeType === 'melee' ? '近战' : '远程'}
+                                  </span>
+                                  {skill.damage !== '0' && (
+                                    <span className="text-orange-300 font-medium">💥 {skill.damage}</span>
+                                  )}
+                                </div>
+                                <div className="text-gray-500">{skill.description}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                ) : (
+                  <div className="text-gray-500 text-center py-12">暂无怪物数据</div>
+                )
+              ) : filtered.length > 0 ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {filtered.map((item) => {
                   const isWeapon = 'weaponType' in item;
                   const weapon = isWeapon ? item as WeaponPreset : null;
                   const armor = !isWeapon ? item as ArmorPreset : null;
@@ -220,9 +313,10 @@ const Encyclopedia: React.FC = () => {
                 })}
               </div>
 
-              {filtered.length === 0 && (
+              ) : (
                 <div className="text-gray-500 text-center py-12">暂无装备数据</div>
-              )}
+              )
+              }
             </div>
           </div>
         </div>

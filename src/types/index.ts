@@ -109,6 +109,30 @@ export interface DialogueNode {
   actions?: DialogueAction[];
 }
 
+export interface MonsterSkill {
+  name: string;
+  description: string;
+  damage: string;
+  rangeType: 'melee' | 'ranged';
+}
+
+export interface Monster {
+  id: string;
+  name: string;
+  rarity: Rarity;
+  description: string;
+  detailDescription: string;
+  hp: number;
+  defense: number;
+  strength: number;
+  intelligence: number;
+  agility: number;
+  charisma: number;
+  expReward: number;
+  skills: MonsterSkill[];
+  icon: string;
+}
+
 export interface DialogueData {
   id: string;
   npcName: string;
