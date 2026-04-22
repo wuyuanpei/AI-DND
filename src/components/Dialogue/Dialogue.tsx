@@ -132,6 +132,9 @@ const Dialogue: React.FC = () => {
         // 战斗中刷新页面：尝试恢复战斗状态
         const savedKey = localStorage.getItem('combat_history_key');
         const preCombat = localStorage.getItem('pre_combat_messages');
+        const pendingCombatResult = localStorage.getItem('pending_combat_result');
+        const savedAttackPayload = localStorage.getItem('combat_attack_payload');
+        const attackPayload = savedAttackPayload ? JSON.parse(savedAttackPayload) : null;
         if (savedKey && preCombat) {
           const combatHistory = await loadDialogueHistory(savedKey);
           useDialogueStore.setState({
@@ -139,6 +142,9 @@ const Dialogue: React.FC = () => {
             combatHistoryKey: savedKey,
             preCombatMessages: JSON.parse(preCombat),
             messages: combatHistory ?? [],
+            pendingCombatResult: pendingCombatResult ? JSON.parse(pendingCombatResult) : null,
+            combatAttackPayload: attackPayload,
+            combatMonsterIds: attackPayload ? attackPayload.monsters.map((m: { id: string }) => m.id) : [],
           });
           if (combatHistory && combatHistory.length > 0) {
             for (let i = combatHistory.length - 1; i >= 0; i--) {
@@ -176,6 +182,13 @@ const Dialogue: React.FC = () => {
               }
               break;
             }
+          }
+        }
+        // 冒险阶段：恢复 pendingAttack
+        if (phase === 'adventure') {
+          const pendingAttack = localStorage.getItem('pending_attack');
+          if (pendingAttack) {
+            useDialogueStore.setState({ pendingAttack: JSON.parse(pendingAttack) });
           }
         }
       }
@@ -377,6 +390,7 @@ const Dialogue: React.FC = () => {
     if (!apiKey) return;
 
     const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
+    const npcName = getDMName(useDialogueStore.getState().dmPhase);
 
     // 获取当前 messages（用于构建 history）
     const historyMessages: DialogueMessage[] = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
@@ -395,7 +409,7 @@ const Dialogue: React.FC = () => {
       }));
 
       const response = await chatWithNPC(
-        'DM',
+        npcName,
         systemPrompt,
         history,
         userMessage,
@@ -448,7 +462,7 @@ const Dialogue: React.FC = () => {
 
         const retryMessage = `你的上一条回复格式有误，无法解析为 JSON。错误原因：${errorHint}。请严格只返回有效的 JSON`;
         const retryResponse = await chatWithNPC(
-          'DM',
+          npcName,
           systemPrompt,
           [...history, { role: 'user' as const, content: userMessage }, { role: 'assistant' as const, content: response.content }],
           retryMessage,
@@ -641,7 +655,7 @@ const Dialogue: React.FC = () => {
         savePlayerStatsToStorage();
       }
 
-      // 冒险阶段：处理 attack 字段（切换到战斗裁判）
+      // 冒险阶段：处理 attack 字段（标记待进入战斗，用户需手动确认）
       if (dmPhase === 'adventure' && result.attack) {
         const availableMonsterIds = new Set(getAvailableMonsters(usePlayerStore.getState().level).map((m) => m.id));
         const validation = validateAttackPayload(result.attack, availableMonsterIds);
@@ -655,43 +669,32 @@ const Dialogue: React.FC = () => {
           return;
         }
 
-        // 验证通过，保存当前 DM 对话并切换到战斗
+        // 验证通过，添加 DM 消息，标记待进入战斗
         addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
-        const preCombatMsgs = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
-        const combatKey = generateCombatHistoryKey();
-        localStorage.setItem('combat_history_key', combatKey);
-        localStorage.setItem('pre_combat_messages', JSON.stringify(preCombatMsgs));
-
-        useDialogueStore.setState({
-          dmPhase: 'combat',
-          combatHistoryKey: combatKey,
-          preCombatMessages: preCombatMsgs,
-          combatMonsterIds: result.attack.monsters.map((m) => m.id),
-          combatAttackPayload: result.attack,
-          messages: [],
-        });
-        void saveDMPhase('combat').catch(() => {});
-
-        // 用战斗裁判系统提示启动战斗
-        const combatSystemPrompt = getCombatSystemPromptForAttack(result.attack);
-        await sendToLLM(
-          combatSystemPrompt,
-          '（玩家遭遇了怪物，准备开始战斗。请描述战斗开场并给出初始选项。）',
-          false
-        );
+        localStorage.setItem('pending_attack', JSON.stringify(result.attack));
+        useDialogueStore.setState({ pendingAttack: result.attack });
+        setOptions([]);
         return;
       }
 
-      // 战斗阶段：处理 combatResult 字段（结束战斗，恢复 DM）
+      // 战斗阶段：处理 combatResult 字段（标记待返回冒险，用户需手动确认）
       if (dmPhase === 'combat' && result.combatResult) {
         const combatResult = result.combatResult;
         let combatRewardExp: number | undefined;
-        if (combatResult.rewardExp !== undefined && combatResult.rewardExp > 0) {
-          const beforeLevel = usePlayerStore.getState().level;
-          usePlayerStore.getState().addExp(combatResult.rewardExp);
-          combatRewardExp = combatResult.rewardExp;
-          if (usePlayerStore.getState().level > beforeLevel) {
-            leveledUp = true;
+
+        // 胜利时由代码根据怪物数据计算经验奖励（所有怪物 expReward 之和）
+        if (combatResult.outcome === 'victory') {
+          const monsterIds = useDialogueStore.getState().combatMonsterIds;
+          const totalExp = (monstersData as { monsters: Array<{ id: string; expReward: number }> }).monsters
+            .filter((m) => monsterIds.includes(m.id))
+            .reduce((sum, m) => sum + m.expReward, 0);
+          if (totalExp > 0) {
+            const beforeLevel = usePlayerStore.getState().level;
+            usePlayerStore.getState().addExp(totalExp);
+            combatRewardExp = totalExp;
+            if (usePlayerStore.getState().level > beforeLevel) {
+              leveledUp = true;
+            }
           }
         }
         savePlayerStatsToStorage();
@@ -703,29 +706,10 @@ const Dialogue: React.FC = () => {
           void saveCombatState(store.combatHistoryKey, useDialogueStore.getState().messages.filter((m) => m.role !== 'system')).catch(() => {});
         }
 
-        // 恢复 DM 对话
-        const preCombatMsgs = store.preCombatMessages;
-        const outcome = combatResult.outcome;
-        const rewardExpText = combatResult.rewardExp ? `玩家获得 ${combatResult.rewardExp} 经验值。` : '';
-        const resumeMessage = `（系统提示：玩家与怪物的战斗已结束。战斗结果：${outcome}。${rewardExpText}请根据此结果继续推进冒险剧情，可决定是否给予金币奖励或触发其他事件。）`;
-
-        useDialogueStore.setState({
-          dmPhase: 'adventure',
-          messages: preCombatMsgs,
-          combatHistoryKey: null,
-          preCombatMessages: [],
-          combatMonsterIds: [],
-          combatAttackPayload: null,
-        });
-        void saveDMPhase('adventure').catch(() => {});
-        localStorage.removeItem('combat_history_key');
-        localStorage.removeItem('pre_combat_messages');
-
-        await sendToLLM(
-          getSystemPromptForDM('adventure'),
-          resumeMessage,
-          false
-        );
+        // 标记待返回冒险，不立即恢复 DM
+        localStorage.setItem('pending_combat_result', JSON.stringify(combatResult));
+        useDialogueStore.setState({ pendingCombatResult: combatResult });
+        setOptions([]);
         return;
       }
 
@@ -828,6 +812,79 @@ const Dialogue: React.FC = () => {
     // 清除当前选项，防止重复点击
     setOptions([]);
     await sendToLLM(systemPrompt, text, true);
+  };
+
+  // 点击"进入战斗"按钮
+  const handleEnterCombat = async () => {
+    const attack = store.pendingAttack;
+    if (!attack) return;
+
+    const preCombatMsgs = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
+    const combatKey = generateCombatHistoryKey();
+    localStorage.setItem('combat_history_key', combatKey);
+    localStorage.setItem('pre_combat_messages', JSON.stringify(preCombatMsgs));
+    localStorage.setItem('combat_attack_payload', JSON.stringify(attack));
+
+    useDialogueStore.setState({
+      dmPhase: 'combat',
+      combatHistoryKey: combatKey,
+      preCombatMessages: preCombatMsgs,
+      combatMonsterIds: attack.monsters.map((m) => m.id),
+      combatAttackPayload: attack,
+      pendingAttack: null,
+      messages: [],
+    });
+    void saveDMPhase('combat').catch(() => {});
+    localStorage.removeItem('pending_attack');
+
+    const combatSystemPrompt = getCombatSystemPromptForAttack(attack);
+    await sendToLLM(
+      combatSystemPrompt,
+      '（玩家遭遇了怪物，准备开始战斗。请描述战斗开场并给出初始选项。）',
+      false
+    );
+  };
+
+  // 点击"返回冒险"按钮
+  const handleReturnToAdventure = async () => {
+    const combatResult = store.pendingCombatResult;
+    if (!combatResult) return;
+
+    const preCombatMsgs = store.preCombatMessages;
+    const outcome = combatResult.outcome;
+    // 胜利时由代码根据怪物数据计算总经验
+    let rewardExpText = '';
+    if (outcome === 'victory') {
+      const monsterIds = store.combatMonsterIds;
+      const totalExp = (monstersData as { monsters: Array<{ id: string; expReward: number }> }).monsters
+        .filter((m) => monsterIds.includes(m.id))
+        .reduce((sum, m) => sum + m.expReward, 0);
+      if (totalExp > 0) {
+        rewardExpText = `玩家已获得 ${totalExp} 经验值，你无需重复奖励经验。`;
+      }
+    }
+    const resumeMessage = `（系统提示：玩家与怪物的战斗已结束。战斗结果：${outcome}。${rewardExpText}请根据此结果继续推进冒险剧情。）`;
+
+    useDialogueStore.setState({
+      dmPhase: 'adventure',
+      messages: preCombatMsgs,
+      combatHistoryKey: null,
+      preCombatMessages: [],
+      combatMonsterIds: [],
+      combatAttackPayload: null,
+      pendingCombatResult: null,
+    });
+    void saveDMPhase('adventure').catch(() => {});
+    localStorage.removeItem('combat_history_key');
+    localStorage.removeItem('pre_combat_messages');
+    localStorage.removeItem('combat_attack_payload');
+    localStorage.removeItem('pending_combat_result');
+
+    await sendToLLM(
+      getSystemPromptForDM('adventure'),
+      resumeMessage,
+      false
+    );
   };
 
   if (!isOpen) {
@@ -1150,57 +1207,75 @@ const Dialogue: React.FC = () => {
         {/* LLM 模式：输入框 */}
         {mode === 'llm' && (
           <div className="space-y-3">
-            {/* 头像生成中提示 */}
-            {pendingCharacter && generatingAvatars && (
-              <div className="text-gray-300 text-base text-center py-2">
-                正在根据角色设定生成头像，请稍候...
-              </div>
-            )}
-
-            {/* 普通选项按钮 */}
-            {!pendingCharacter && !isLoading && !generatingAvatars && (
-              <div className="flex flex-wrap gap-2">
-                {options.filter((opt) => !opt.includes('自定义')).length > 0 ? (
-                  options
-                    .filter((opt) => !opt.includes('自定义'))
-                    .map((opt, idx) => (
-                      <button
-                        key={idx}
-                        className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
-                        onClick={() => handleOptionClick(opt)}
-                      >
-                        {opt}
-                      </button>
-                    ))
-                ) : (
-                  <button
-                    className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
-                    onClick={() => handleOptionClick('请给我一些决策选项')}
-                  >
-                    请给我一些决策选项
-                  </button>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                className="flex-1 bg-gray-600 text-white text-base p-3 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
-                placeholder="输入消息..."
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
-                disabled={isLoading || generatingAvatars || pendingCharacter !== null}
-              />
+            {store.pendingAttack ? (
               <button
-                className="bg-blue-600 hover:bg-blue-500 text-white text-base px-5 rounded disabled:opacity-50"
-                onClick={handleLLMSubmit}
-                disabled={isLoading || !userInput.trim() || generatingAvatars || pendingCharacter !== null}
+                className="w-full bg-red-600 hover:bg-red-500 text-white text-xl font-bold py-5 rounded shadow-lg transition-colors"
+                onClick={handleEnterCombat}
               >
-                发送
+                进入战斗
               </button>
-            </div>
+            ) : store.pendingCombatResult ? (
+              <button
+                className="w-full bg-green-600 hover:bg-green-500 text-white text-xl font-bold py-5 rounded shadow-lg transition-colors"
+                onClick={handleReturnToAdventure}
+              >
+                返回冒险
+              </button>
+            ) : (
+              <>
+                {/* 头像生成中提示 */}
+                {pendingCharacter && generatingAvatars && (
+                  <div className="text-gray-300 text-base text-center py-2">
+                    正在根据角色设定生成头像，请稍候...
+                  </div>
+                )}
+
+                {/* 普通选项按钮 */}
+                {!pendingCharacter && !isLoading && !generatingAvatars && (
+                  <div className="flex flex-wrap gap-2">
+                    {options.filter((opt) => !opt.includes('自定义')).length > 0 ? (
+                      options
+                        .filter((opt) => !opt.includes('自定义'))
+                        .map((opt, idx) => (
+                          <button
+                            key={idx}
+                            className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
+                            onClick={() => handleOptionClick(opt)}
+                          >
+                            {opt}
+                          </button>
+                        ))
+                    ) : (
+                      <button
+                        className="bg-gray-600 hover:bg-gray-500 text-white text-sm px-4 py-2 rounded border border-gray-500"
+                        onClick={() => handleOptionClick('请给我一些决策选项')}
+                      >
+                        请给我一些决策选项
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 bg-gray-600 text-white text-base p-3 rounded border border-gray-500 focus:border-blue-400 outline-none disabled:opacity-50"
+                    placeholder="输入消息..."
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLLMSubmit()}
+                    disabled={isLoading || generatingAvatars || pendingCharacter !== null}
+                  />
+                  <button
+                    className="bg-blue-600 hover:bg-blue-500 text-white text-base px-5 rounded disabled:opacity-50"
+                    onClick={handleLLMSubmit}
+                    disabled={isLoading || !userInput.trim() || generatingAvatars || pendingCharacter !== null}
+                  >
+                    发送
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

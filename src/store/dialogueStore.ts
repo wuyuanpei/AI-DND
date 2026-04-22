@@ -34,6 +34,8 @@ interface DialogueState {
   preCombatMessages: DialogueMessage[];
   combatMonsterIds: string[];
   combatAttackPayload: AttackPayload | null;
+  pendingAttack: AttackPayload | null;
+  pendingCombatResult: { outcome: 'victory' | 'defeat' | 'escape'; rewardExp?: number } | null;
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
@@ -66,6 +68,8 @@ const initialDialogueState = {
   preCombatMessages: [] as DialogueMessage[],
   combatMonsterIds: [] as string[],
   combatAttackPayload: null,
+  pendingAttack: null,
+  pendingCombatResult: null,
 };
 
 export const useDialogueStore = create<DialogueState>((set) => ({

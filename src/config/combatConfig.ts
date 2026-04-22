@@ -23,8 +23,7 @@ export const COMBAT_REFEREE_PROMPT = `你是 DND 游戏的战斗裁判。
   "dialogue": "战斗结束总结...",
   "options": ["继续冒险"],
   "combatResult": {
-    "outcome": "victory" | "defeat" | "escape",
-    "rewardExp": 30
+    "outcome": "victory" | "defeat" | "escape"
   }
 }
 字段说明：
@@ -32,8 +31,7 @@ export const COMBAT_REFEREE_PROMPT = `你是 DND 游戏的战斗裁判。
 - options: 玩家可点击的选项按钮列表（可选）。
 - combatResult: 仅在战斗结束时出现。
   - outcome: 战斗结果，victory（胜利）、defeat（战败）、escape（逃跑）。
-  - rewardExp: 玩家获得的经验值。根据战斗难度和怪物数量合理给出。
-注意：战斗裁判只决定经验奖励（rewardExp），金币奖励不由你决定。`;
+注意：战斗裁判不决定经验奖励和金币奖励，经验由系统根据战斗结果自动结算。`;
 
 export function buildCombatSystemPrompt(
   playerContext: string,

@@ -64,6 +64,9 @@ const GameLayout: React.FC = () => {
     await clearAllCombatStates();
     localStorage.removeItem('combat_history_key');
     localStorage.removeItem('pre_combat_messages');
+    localStorage.removeItem('combat_attack_payload');
+    localStorage.removeItem('pending_attack');
+    localStorage.removeItem('pending_combat_result');
     clearPlayerStats();
     logMemory('清空玩家记忆卡片', 'IndexedDB: playerJson, avatar, logs');
   };

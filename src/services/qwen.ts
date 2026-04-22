@@ -41,7 +41,7 @@ export async function chatWithNPC(
   };
 
   // 记录 API 调用请求信息
-  logApiCall(`API 调用: chatWithNPC (NPC: ${npcName}, 模型: ${model})`, {
+  logApiCall(`API 调用: chatWithNPC (角色: ${npcName}, 模型: ${model})`, {
     systemPrompt,
     historyCount: history.length,
     userMessage,
@@ -78,7 +78,7 @@ export async function chatWithNPC(
   };
 
   // 记录 API 调用响应信息
-  logApiCall(`API 返回成功 (NPC: ${npcName}, 模型: ${model})`, {
+  logApiCall(`API 返回成功 (角色: ${npcName}, 模型: ${model})`, {
     response: result.content,
     usage: result.usage,
     config,
