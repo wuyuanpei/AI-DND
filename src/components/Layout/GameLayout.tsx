@@ -15,7 +15,7 @@ import { usePlayerStore } from '../../store/playerStore';
 import { useDialogueStore } from '../../store/dialogueStore';
 import { useWorldStore } from '../../store/worldStore';
 import { logMemory } from '../../store/logStore';
-import { loadPlayerJson, loadAvatar, clearPlayerData, clearShopData } from '../../utils/playerDB';
+import { loadPlayerJson, loadAvatar, clearPlayerData, clearShopData, clearAllCombatStates } from '../../utils/playerDB';
 import { savePlayerStatsToStorage, loadPlayerStatsFromStorage, clearPlayerStats } from '../../utils/playerStats';
 
 const GameLayout: React.FC = () => {
@@ -61,6 +61,9 @@ const GameLayout: React.FC = () => {
     useWorldStore.setState({});
     await clearPlayerData();
     await clearShopData();
+    await clearAllCombatStates();
+    localStorage.removeItem('combat_history_key');
+    localStorage.removeItem('pre_combat_messages');
     clearPlayerStats();
     logMemory('清空玩家记忆卡片', 'IndexedDB: playerJson, avatar, logs');
   };

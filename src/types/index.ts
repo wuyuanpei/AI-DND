@@ -133,6 +133,14 @@ export interface Monster {
   icon: string;
 }
 
+export interface AttackPayload {
+  monsters: Array<{
+    id: string;
+    x: number;
+    y: number;
+  }>;
+}
+
 export interface DialogueData {
   id: string;
   npcName: string;

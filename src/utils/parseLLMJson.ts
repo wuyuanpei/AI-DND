@@ -9,6 +9,13 @@ export interface ParseLLMJsonResult {
   rewardExp?: number;
   deductGold?: number;
   error?: string;
+  attack?: {
+    monsters: Array<{ id: string; x: number; y: number }>;
+  };
+  combatResult?: {
+    outcome: 'victory' | 'defeat' | 'escape';
+    rewardExp?: number;
+  };
 }
 
 function stripMarkdownCodeBlocks(content: string): string {
@@ -249,23 +256,55 @@ function parseOptions(value: unknown): string[] | undefined {
   return undefined;
 }
 
+function parseAttack(value: unknown): ParseLLMJsonResult['attack'] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const obj = value as Record<string, unknown>;
+  if (!Array.isArray(obj.monsters)) return undefined;
+  const monsters = obj.monsters.filter((m): m is { id: string; x: number; y: number } => {
+    if (!m || typeof m !== 'object') return false;
+    const mo = m as Record<string, unknown>;
+    return typeof mo.id === 'string' && typeof mo.x === 'number' && typeof mo.y === 'number';
+  });
+  if (monsters.length === 0) return undefined;
+  return { monsters };
+}
+
+function parseCombatResult(value: unknown): ParseLLMJsonResult['combatResult'] | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const obj = value as Record<string, unknown>;
+  const outcome = obj.outcome;
+  if (outcome !== 'victory' && outcome !== 'defeat' && outcome !== 'escape') return undefined;
+  return {
+    outcome,
+    rewardExp: typeof obj.rewardExp === 'number' ? obj.rewardExp : undefined,
+  };
+}
+
+function extractParsedFields(parsed: Record<string, unknown>): Omit<ParseLLMJsonResult, 'parsed' | 'error'> {
+  const dialogueValue = typeof parsed.dialogue === 'string' ? parsed.dialogue : typeof parsed.dialog === 'string' ? parsed.dialog : undefined;
+  return {
+    dialogue: dialogueValue,
+    options: parseOptions(parsed.options),
+    buy: parseOptions(parsed.buy),
+    character: parsed.character,
+    startAdventure: parsed.startAdventure === true,
+    rewardGold: typeof parsed.rewardGold === 'number' ? parsed.rewardGold : undefined,
+    rewardExp: typeof parsed.rewardExp === 'number' ? parsed.rewardExp : undefined,
+    deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
+    attack: parseAttack(parsed.attack),
+    combatResult: parseCombatResult(parsed.combatResult),
+  };
+}
+
 export function parseLLMJson(content: string): ParseLLMJsonResult {
   const str = stripMarkdownCodeBlocks(content);
 
   // First attempt: direct parse
   try {
     const parsed = JSON.parse(str) as Record<string, unknown>;
-    const dialogueValue = typeof parsed.dialogue === 'string' ? parsed.dialogue : typeof parsed.dialog === 'string' ? parsed.dialog : undefined;
     return {
       parsed,
-      dialogue: dialogueValue,
-      options: parseOptions(parsed.options),
-      buy: parseOptions(parsed.buy),
-      character: parsed.character,
-      startAdventure: parsed.startAdventure === true,
-      rewardGold: typeof parsed.rewardGold === 'number' ? parsed.rewardGold : undefined,
-      rewardExp: typeof parsed.rewardExp === 'number' ? parsed.rewardExp : undefined,
-      deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
+      ...extractParsedFields(parsed),
     };
   } catch {
     // ignore, try repair
@@ -278,17 +317,9 @@ export function parseLLMJson(content: string): ParseLLMJsonResult {
 
   try {
     const parsed = JSON.parse(repaired) as Record<string, unknown>;
-    const dialogueValue = typeof parsed.dialogue === 'string' ? parsed.dialogue : typeof parsed.dialog === 'string' ? parsed.dialog : undefined;
     return {
       parsed,
-      dialogue: dialogueValue,
-      options: parseOptions(parsed.options),
-      buy: parseOptions(parsed.buy),
-      character: parsed.character,
-      startAdventure: parsed.startAdventure === true,
-      rewardGold: typeof parsed.rewardGold === 'number' ? parsed.rewardGold : undefined,
-      rewardExp: typeof parsed.rewardExp === 'number' ? parsed.rewardExp : undefined,
-      deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
+      ...extractParsedFields(parsed),
     };
   } catch (e) {
     // Fallback: extract fields with regex, or use raw string as dialogue

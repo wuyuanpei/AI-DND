@@ -1,4 +1,6 @@
 import { usePlayerStore, type PlayerState } from '../store/playerStore';
+import { buildMonsterPrompt, getAvailableMonsters } from './monsterUtils';
+import type { DMPhase } from '../store/dialogueStore';
 
 export function buildPlayerContextPrompt(state: PlayerState): string {
   const equipmentEntries = Object.entries(state.equipment)
@@ -49,8 +51,14 @@ ${inventoryEntries}
 `;
 }
 
-export function buildSystemPrompt(basePrompt: string): string {
+export function buildSystemPrompt(basePrompt: string, phase?: DMPhase): string {
   const state = usePlayerStore.getState();
   const ctx = buildPlayerContextPrompt(state);
-  return `${basePrompt}\n\n${ctx}`;
+  let prompt = `${basePrompt}\n\n${ctx}`;
+  if (phase === 'adventure') {
+    const monsters = getAvailableMonsters(state.level);
+    const monsterCtx = buildMonsterPrompt(monsters);
+    prompt += `\n\n${monsterCtx}`;
+  }
+  return prompt;
 }

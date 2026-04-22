@@ -330,3 +330,35 @@ export async function clearShopData(): Promise<void> {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+// Combat history helpers
+export function generateCombatHistoryKey(): string {
+  return `combat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export async function saveCombatState(key: string, messages: DialogueMessage[]): Promise<void> {
+  return saveDialogueHistory(key, messages);
+}
+
+export async function loadCombatState(key: string): Promise<DialogueMessage[] | null> {
+  return loadDialogueHistory(key);
+}
+
+export async function clearAllCombatStates(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DIALOGUE_STORE, 'readwrite');
+    const store = tx.objectStore(DIALOGUE_STORE);
+    const request = store.getAllKeys();
+    request.onsuccess = () => {
+      const keys = request.result as string[];
+      for (const key of keys) {
+        if (typeof key === 'string' && key.startsWith('combat_')) {
+          store.delete(key);
+        }
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

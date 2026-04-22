@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { DialogueMessage, DialogueNode, WeaponPreset, ArmorPreset } from '../types';
+import type { DialogueMessage, DialogueNode, WeaponPreset, ArmorPreset, AttackPayload } from '../types';
 
-export type DMPhase = 'creation' | 'shop' | 'adventure';
+export type DMPhase = 'creation' | 'shop' | 'adventure' | 'combat';
 
 export const getDMName = (phase: DMPhase): string => {
   if (phase === 'creation' || phase === 'shop') return '冒险向导';
+  if (phase === 'combat') return '战斗裁判';
   return '冒险主持人';
 };
 
@@ -27,6 +28,12 @@ interface DialogueState {
   shopArmors: ArmorPreset[];
   selectedArmorIds: Set<string>;
   purchasedArmorIds: Set<string>;
+
+  // Combat state
+  combatHistoryKey: string | null;
+  preCombatMessages: DialogueMessage[];
+  combatMonsterIds: string[];
+  combatAttackPayload: AttackPayload | null;
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
@@ -55,6 +62,10 @@ const initialDialogueState = {
   shopArmors: [] as ArmorPreset[],
   selectedArmorIds: new Set<string>(),
   purchasedArmorIds: new Set<string>(),
+  combatHistoryKey: null,
+  preCombatMessages: [] as DialogueMessage[],
+  combatMonsterIds: [] as string[],
+  combatAttackPayload: null,
 };
 
 export const useDialogueStore = create<DialogueState>((set) => ({

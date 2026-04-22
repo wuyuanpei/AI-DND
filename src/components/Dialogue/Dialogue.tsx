@@ -3,10 +3,13 @@ import { useDialogueStore, getDMName, type DMPhase } from '../../store/dialogueS
 import { useSettingsStore, IMAGE_API_URL } from '../../store/settingsStore';
 import { usePlayerStore } from '../../store/playerStore';
 import { logError, logMemory } from '../../store/logStore';
-import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds, saveShopArmorIds, loadShopArmorIds, savePurchasedArmorIds, loadPurchasedArmorIds, clearShopData } from '../../utils/playerDB';
+import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds, saveShopArmorIds, loadShopArmorIds, savePurchasedArmorIds, loadPurchasedArmorIds, clearShopData, generateCombatHistoryKey, saveCombatState } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
 import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT, buildShopSystemPrompt } from '../../config/dmConfig';
-import { buildSystemPrompt } from '../../utils/dmPrompt';
+import { buildSystemPrompt, buildPlayerContextPrompt } from '../../utils/dmPrompt';
+import { getAvailableMonsters, validateAttackPayload } from '../../utils/monsterUtils';
+import { buildCombatSystemPrompt } from '../../config/combatConfig';
+import monstersData from '../../data/monsters.json';
 import { chatWithNPC } from '../../services/qwen';
 import { generateCharacterPortrait } from '../../services/imageGen';
 import { buildPortraitPrompt } from '../../config/imageConfig';
@@ -31,7 +34,15 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
   if (phase === 'creation') {
     return base;
   }
-  return buildSystemPrompt(base);
+  return buildSystemPrompt(base, phase);
+};
+
+const getCombatSystemPromptForAttack = (attack: { monsters: Array<{ id: string; x: number; y: number }> }): string => {
+  const playerCtx = buildPlayerContextPrompt(usePlayerStore.getState());
+  const monsters = attack.monsters
+    .map(m => (monstersData as { monsters: Array<{ id: string; name: string; hp: number; defense: number; strength: number; agility: number; intelligence: number; charisma: number; expReward: number; skills: Array<{ name: string; rangeType: string; damage: string }> }> }).monsters.find(mo => mo.id === m.id))
+    .filter(Boolean);
+  return buildCombatSystemPrompt(playerCtx, monsters as Parameters<typeof buildCombatSystemPrompt>[1], attack);
 };
 
 const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, shopArmors: Array<Record<string, unknown>>, purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
@@ -116,21 +127,55 @@ const Dialogue: React.FC = () => {
     (async () => {
       const savedPhase = await loadDMPhase();
       const phase: DMPhase = (savedPhase as DMPhase) || 'creation';
-      const historyKey = dmPhaseToHistoryKey(phase);
-      const history = await loadDialogueHistory(historyKey);
 
-      useDialogueStore.setState({ dmPhase: phase });
-      if (history && history.length > 0) {
-        useDialogueStore.setState({ messages: history });
-        // 恢复最后一个 assistant 消息的 options
-        for (let i = history.length - 1; i >= 0; i--) {
-          const msg = history[i];
-          if (msg.role === 'assistant' && msg.rawJson) {
-            const parsed = parseLLMJson(msg.rawJson);
-            if (parsed.options) {
-              setOptions(parsed.options);
+      if (phase === 'combat') {
+        // 战斗中刷新页面：尝试恢复战斗状态
+        const savedKey = localStorage.getItem('combat_history_key');
+        const preCombat = localStorage.getItem('pre_combat_messages');
+        if (savedKey && preCombat) {
+          const combatHistory = await loadDialogueHistory(savedKey);
+          useDialogueStore.setState({
+            dmPhase: 'combat',
+            combatHistoryKey: savedKey,
+            preCombatMessages: JSON.parse(preCombat),
+            messages: combatHistory ?? [],
+          });
+          if (combatHistory && combatHistory.length > 0) {
+            for (let i = combatHistory.length - 1; i >= 0; i--) {
+              const msg = combatHistory[i];
+              if (msg.role === 'assistant' && msg.rawJson) {
+                const parsed = parseLLMJson(msg.rawJson);
+                if (parsed.options) {
+                  setOptions(parsed.options);
+                }
+                break;
+              }
             }
-            break;
+          }
+        } else {
+          // 战斗状态丢失，回退到冒险阶段
+          useDialogueStore.setState({ dmPhase: 'adventure' });
+          const history = await loadDialogueHistory('adventure');
+          if (history && history.length > 0) {
+            useDialogueStore.setState({ messages: history });
+          }
+        }
+      } else {
+        const historyKey = dmPhaseToHistoryKey(phase);
+        const history = await loadDialogueHistory(historyKey);
+        useDialogueStore.setState({ dmPhase: phase });
+        if (history && history.length > 0) {
+          useDialogueStore.setState({ messages: history });
+          // 恢复最后一个 assistant 消息的 options
+          for (let i = history.length - 1; i >= 0; i--) {
+            const msg = history[i];
+            if (msg.role === 'assistant' && msg.rawJson) {
+              const parsed = parseLLMJson(msg.rawJson);
+              if (parsed.options) {
+                setOptions(parsed.options);
+              }
+              break;
+            }
           }
         }
       }
@@ -141,9 +186,14 @@ const Dialogue: React.FC = () => {
   // 初始化时自动打开 DM 对话
   useEffect(() => {
     if (!restored || isOpen) return;
-    const prompt = getSystemPromptForDM(store.dmPhase);
-    openLLMDialogue(DM_NPC_ID, dmName, prompt);
-  }, [restored, isOpen, openLLMDialogue, store.dmPhase, dmName]);
+    if (store.dmPhase === 'combat' && store.combatAttackPayload) {
+      const prompt = getCombatSystemPromptForAttack(store.combatAttackPayload);
+      openLLMDialogue(DM_NPC_ID, dmName, prompt);
+    } else {
+      const prompt = getSystemPromptForDM(store.dmPhase);
+      openLLMDialogue(DM_NPC_ID, dmName, prompt);
+    }
+  }, [restored, isOpen, openLLMDialogue, store.dmPhase, dmName, store.combatAttackPayload]);
 
   // 自动滚动到最新消息
   useEffect(() => {
@@ -231,6 +281,7 @@ const Dialogue: React.FC = () => {
   useEffect(() => {
     if (!restored) return;
     if (store.dmPhase === 'shop') return; // 商店阶段由专用 useEffect 处理
+    if (store.dmPhase === 'combat') return; // 战斗阶段由初始化 useEffect 处理
     if (
       isOpen &&
       !isLoading &&
@@ -244,10 +295,14 @@ const Dialogue: React.FC = () => {
   // 每当 DM 对话内容变化时，持久化当前阶段的对话历史（只保存可见的 assistant/user 消息）
   useEffect(() => {
     if (!restored) return;
-    const key = dmPhaseToHistoryKey(store.dmPhase);
     const visibleMessages = messages.filter((m) => m.role !== 'system');
-    void saveDialogueHistory(key, visibleMessages).catch(() => {});
-  }, [restored, store.dmPhase, messages]);
+    if (store.dmPhase === 'combat' && store.combatHistoryKey) {
+      void saveCombatState(store.combatHistoryKey, visibleMessages).catch(() => {});
+    } else {
+      const key = dmPhaseToHistoryKey(store.dmPhase);
+      void saveDialogueHistory(key, visibleMessages).catch(() => {});
+    }
+  }, [restored, store.dmPhase, store.combatHistoryKey, messages]);
 
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
@@ -586,6 +641,94 @@ const Dialogue: React.FC = () => {
         savePlayerStatsToStorage();
       }
 
+      // 冒险阶段：处理 attack 字段（切换到战斗裁判）
+      if (dmPhase === 'adventure' && result.attack) {
+        const availableMonsterIds = new Set(getAvailableMonsters(usePlayerStore.getState().level).map((m) => m.id));
+        const validation = validateAttackPayload(result.attack, availableMonsterIds);
+        if (!validation.valid) {
+          addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
+          await sendToLLM(
+            systemPrompt,
+            `（系统提示：你返回的 attack 字段不合法。${validation.error}。请重新返回合法的 attack 字段，确保怪物ID来自可用列表且数量在1-3个之间。）`,
+            false
+          );
+          return;
+        }
+
+        // 验证通过，保存当前 DM 对话并切换到战斗
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
+        const preCombatMsgs = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
+        const combatKey = generateCombatHistoryKey();
+        localStorage.setItem('combat_history_key', combatKey);
+        localStorage.setItem('pre_combat_messages', JSON.stringify(preCombatMsgs));
+
+        useDialogueStore.setState({
+          dmPhase: 'combat',
+          combatHistoryKey: combatKey,
+          preCombatMessages: preCombatMsgs,
+          combatMonsterIds: result.attack.monsters.map((m) => m.id),
+          combatAttackPayload: result.attack,
+          messages: [],
+        });
+        void saveDMPhase('combat').catch(() => {});
+
+        // 用战斗裁判系统提示启动战斗
+        const combatSystemPrompt = getCombatSystemPromptForAttack(result.attack);
+        await sendToLLM(
+          combatSystemPrompt,
+          '（玩家遭遇了怪物，准备开始战斗。请描述战斗开场并给出初始选项。）',
+          false
+        );
+        return;
+      }
+
+      // 战斗阶段：处理 combatResult 字段（结束战斗，恢复 DM）
+      if (dmPhase === 'combat' && result.combatResult) {
+        const combatResult = result.combatResult;
+        let combatRewardExp: number | undefined;
+        if (combatResult.rewardExp !== undefined && combatResult.rewardExp > 0) {
+          const beforeLevel = usePlayerStore.getState().level;
+          usePlayerStore.getState().addExp(combatResult.rewardExp);
+          combatRewardExp = combatResult.rewardExp;
+          if (usePlayerStore.getState().level > beforeLevel) {
+            leveledUp = true;
+          }
+        }
+        savePlayerStatsToStorage();
+
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content, rewardExp: combatRewardExp, leveledUp });
+
+        // 保存战斗历史
+        if (store.combatHistoryKey) {
+          void saveCombatState(store.combatHistoryKey, useDialogueStore.getState().messages.filter((m) => m.role !== 'system')).catch(() => {});
+        }
+
+        // 恢复 DM 对话
+        const preCombatMsgs = store.preCombatMessages;
+        const outcome = combatResult.outcome;
+        const rewardExpText = combatResult.rewardExp ? `玩家获得 ${combatResult.rewardExp} 经验值。` : '';
+        const resumeMessage = `（系统提示：玩家与怪物的战斗已结束。战斗结果：${outcome}。${rewardExpText}请根据此结果继续推进冒险剧情，可决定是否给予金币奖励或触发其他事件。）`;
+
+        useDialogueStore.setState({
+          dmPhase: 'adventure',
+          messages: preCombatMsgs,
+          combatHistoryKey: null,
+          preCombatMessages: [],
+          combatMonsterIds: [],
+          combatAttackPayload: null,
+        });
+        void saveDMPhase('adventure').catch(() => {});
+        localStorage.removeItem('combat_history_key');
+        localStorage.removeItem('pre_combat_messages');
+
+        await sendToLLM(
+          getSystemPromptForDM('adventure'),
+          resumeMessage,
+          false
+        );
+        return;
+      }
+
       if (!currentPlayerIsCreated && result.character) {
         const char = result.character as Record<string, unknown>;
         if (
@@ -660,18 +803,28 @@ const Dialogue: React.FC = () => {
   const handleLLMSubmit = async () => {
     if (!userInput.trim()) return;
 
-    const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds)
-      : getSystemPromptForDM(store.dmPhase);
+    let systemPrompt: string;
+    if (store.dmPhase === 'shop') {
+      systemPrompt = getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds);
+    } else if (store.dmPhase === 'combat' && store.combatAttackPayload) {
+      systemPrompt = getCombatSystemPromptForAttack(store.combatAttackPayload);
+    } else {
+      systemPrompt = getSystemPromptForDM(store.dmPhase);
+    }
     await sendToLLM(systemPrompt, userInput.trim(), true);
     setUserInput('');
   };
 
   // 处理选项点击
   const handleOptionClick = async (text: string) => {
-    const systemPrompt = store.dmPhase === 'shop'
-      ? getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds)
-      : getSystemPromptForDM(store.dmPhase);
+    let systemPrompt: string;
+    if (store.dmPhase === 'shop') {
+      systemPrompt = getShopSystemPrompt(store.shopWeapons, store.shopArmors, store.purchasedWeaponIds, store.purchasedArmorIds);
+    } else if (store.dmPhase === 'combat' && store.combatAttackPayload) {
+      systemPrompt = getCombatSystemPromptForAttack(store.combatAttackPayload);
+    } else {
+      systemPrompt = getSystemPromptForDM(store.dmPhase);
+    }
     // 清除当前选项，防止重复点击
     setOptions([]);
     await sendToLLM(systemPrompt, text, true);
