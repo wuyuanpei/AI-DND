@@ -16,6 +16,7 @@ export interface ParseLLMJsonResult {
   };
   combatResult?: {
     outcome: 'victory' | 'defeat' | 'escape';
+    battleSummary?: string;
   };
 }
 
@@ -279,7 +280,10 @@ function parseCombatResult(value: unknown): ParseLLMJsonResult['combatResult'] |
   const obj = value as Record<string, unknown>;
   const outcome = obj.outcome;
   if (outcome !== 'victory' && outcome !== 'defeat' && outcome !== 'escape') return undefined;
-  return { outcome };
+  return {
+    outcome,
+    battleSummary: typeof obj.battleSummary === 'string' ? obj.battleSummary : undefined,
+  };
 }
 
 function extractParsedFields(parsed: Record<string, unknown>): Omit<ParseLLMJsonResult, 'parsed' | 'error'> {

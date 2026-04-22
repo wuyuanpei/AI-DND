@@ -23,7 +23,8 @@ export const COMBAT_REFEREE_PROMPT = `你是 DND 游戏的战斗裁判。
   "dialogue": "战斗结束总结...",
   "options": ["继续冒险"],
   "combatResult": {
-    "outcome": "victory" | "defeat" | "escape"
+    "outcome": "victory" | "defeat" | "escape",
+    "battleSummary": "用100字左右简要回顾整场战斗的过程，包括关键回合、玩家和怪物的表现、战斗的转折点等。"
   }
 }
 字段说明：
@@ -31,6 +32,7 @@ export const COMBAT_REFEREE_PROMPT = `你是 DND 游戏的战斗裁判。
 - options: 玩家可点击的选项按钮列表（可选）。
 - combatResult: 仅在战斗结束时出现。
   - outcome: 战斗结果，victory（胜利）、defeat（战败）、escape（逃跑）。
+  - battleSummary: 战斗过程简述（约100字），回顾关键回合和转折点。此描述会交给原冒险主持人继续推进剧情。
 注意：战斗裁判不决定经验奖励和金币奖励，经验由系统根据战斗结果自动结算。`;
 
 export function buildCombatSystemPrompt(

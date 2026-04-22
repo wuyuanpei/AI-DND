@@ -875,7 +875,8 @@ const Dialogue: React.FC = () => {
         rewardExpText = `玩家已获得 ${totalExp} 经验值，你无需重复奖励经验。`;
       }
     }
-    const resumeMessage = `（系统提示：玩家与怪物的战斗已结束。战斗结果：${outcome}。${rewardExpText}请根据此结果继续推进冒险剧情。）`;
+    const battleSummaryText = combatResult.battleSummary ? `战斗过程简述：${combatResult.battleSummary}` : '';
+    const resumeMessage = `（系统提示：玩家与怪物的战斗已结束。战斗结果：${outcome}。${rewardExpText}${battleSummaryText ? battleSummaryText + '。' : ''}请根据此结果继续推进冒险剧情。）`;
 
     useDialogueStore.setState({
       dmPhase: 'adventure',
