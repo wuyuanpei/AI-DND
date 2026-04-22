@@ -34,7 +34,6 @@ export const COMBAT_REFEREE_PROMPT = `你是 DND 游戏的战斗裁判。
 注意：战斗裁判不决定经验奖励和金币奖励，经验由系统根据战斗结果自动结算。`;
 
 export function buildCombatSystemPrompt(
-  playerContext: string,
   monsters: Monster[],
   attack: AttackPayload
 ): string {
@@ -45,5 +44,12 @@ export function buildCombatSystemPrompt(
   技能: ${m.skills.map((s) => `${s.name}(${s.rangeType}, ${s.damage})`).join('、')}`;
   }).join('\n');
 
-  return `${COMBAT_REFEREE_PROMPT}\n\n${playerContext}\n\n【遭遇怪物信息】\n${monsterLines}`;
+  const envSection = attack.environment
+    ? `\n\n【战场环境】\n${attack.environment}`
+    : '';
+  const bgSection = attack.battleBackground
+    ? `\n\n【战斗背景】\n${attack.battleBackground}`
+    : '';
+
+  return `${COMBAT_REFEREE_PROMPT}\n\n【遭遇怪物信息】\n${monsterLines}${envSection}${bgSection}`;
 }

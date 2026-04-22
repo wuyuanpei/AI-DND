@@ -6,7 +6,7 @@ import { logError, logMemory } from '../../store/logStore';
 import { savePlayerJson, saveAvatar, saveDMPhase, loadDMPhase, saveDialogueHistory, loadDialogueHistory, saveShopWeaponIds, loadShopWeaponIds, savePurchasedWeaponIds, loadPurchasedWeaponIds, saveShopArmorIds, loadShopArmorIds, savePurchasedArmorIds, loadPurchasedArmorIds, clearShopData, generateCombatHistoryKey, saveCombatState } from '../../utils/playerDB';
 import { savePlayerStatsToStorage } from '../../utils/playerStats';
 import { DM_BASE_PROMPT, DM_CHARACTER_CREATION_PROMPT, DM_SHOP_PROMPT, buildShopSystemPrompt } from '../../config/dmConfig';
-import { buildSystemPrompt, buildPlayerContextPrompt } from '../../utils/dmPrompt';
+import { buildSystemPrompt, buildPlayerContextMessage } from '../../utils/dmPrompt';
 import { getAvailableMonsters, validateAttackPayload } from '../../utils/monsterUtils';
 import { buildCombatSystemPrompt } from '../../config/combatConfig';
 import monstersData from '../../data/monsters.json';
@@ -37,12 +37,11 @@ const getSystemPromptForDM = (phase: DMPhase): string => {
   return buildSystemPrompt(base, phase);
 };
 
-const getCombatSystemPromptForAttack = (attack: { monsters: Array<{ id: string; x: number; y: number }> }): string => {
-  const playerCtx = buildPlayerContextPrompt(usePlayerStore.getState());
+const getCombatSystemPromptForAttack = (attack: { monsters: Array<{ id: string; x: number; y: number }>; environment?: string; battleBackground?: string }): string => {
   const monsters = attack.monsters
     .map(m => (monstersData as { monsters: Array<{ id: string; name: string; hp: number; defense: number; strength: number; agility: number; intelligence: number; charisma: number; expReward: number; skills: Array<{ name: string; rangeType: string; damage: string }> }> }).monsters.find(mo => mo.id === m.id))
     .filter(Boolean);
-  return buildCombatSystemPrompt(playerCtx, monsters as Parameters<typeof buildCombatSystemPrompt>[1], attack);
+  return buildCombatSystemPrompt(monsters as Parameters<typeof buildCombatSystemPrompt>[0], attack);
 };
 
 const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, shopArmors: Array<Record<string, unknown>>, purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
@@ -403,16 +402,29 @@ const Dialogue: React.FC = () => {
     }
 
     try {
-      const history: ChatMessage[] = historyMessages.map((m) => ({
-        role: m.role === 'npc' ? 'assistant' : m.role,
-        content: m.role === 'assistant' && m.rawJson ? m.rawJson : m.content,
-      }));
+      const currentPhase = useDialogueStore.getState().dmPhase;
+      const ctxMsg = currentPhase !== 'creation' ? buildPlayerContextMessage() : '';
+
+      // 构建 history：给每条 user 消息追加实时数据
+      const history: ChatMessage[] = historyMessages.map((m) => {
+        let content = m.role === 'assistant' && m.rawJson ? m.rawJson : m.content;
+        if (m.role === 'user' && ctxMsg) {
+          content = `${content}\n\n${ctxMsg}`;
+        }
+        return {
+          role: m.role === 'npc' ? 'assistant' : m.role,
+          content,
+        };
+      });
+
+      // 当前消息也追加实时数据
+      const finalUserMessage = ctxMsg ? `${userMessage}\n\n${ctxMsg}` : userMessage;
 
       const response = await chatWithNPC(
         npcName,
         systemPrompt,
         history,
-        userMessage,
+        finalUserMessage,
         apiKey,
         model,
         apiUrl
@@ -464,7 +476,7 @@ const Dialogue: React.FC = () => {
         const retryResponse = await chatWithNPC(
           npcName,
           systemPrompt,
-          [...history, { role: 'user' as const, content: userMessage }, { role: 'assistant' as const, content: response.content }],
+          [...history, { role: 'user' as const, content: finalUserMessage }, { role: 'assistant' as const, content: response.content }],
           retryMessage,
           apiKey,
           model,

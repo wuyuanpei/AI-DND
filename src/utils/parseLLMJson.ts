@@ -11,6 +11,8 @@ export interface ParseLLMJsonResult {
   error?: string;
   attack?: {
     monsters: Array<{ id: string; x: number; y: number }>;
+    environment?: string;
+    battleBackground?: string;
   };
   combatResult?: {
     outcome: 'victory' | 'defeat' | 'escape';
@@ -265,7 +267,11 @@ function parseAttack(value: unknown): ParseLLMJsonResult['attack'] | undefined {
     return typeof mo.id === 'string' && typeof mo.x === 'number' && typeof mo.y === 'number';
   });
   if (monsters.length === 0) return undefined;
-  return { monsters };
+  return {
+    monsters,
+    environment: typeof obj.environment === 'string' ? obj.environment : undefined,
+    battleBackground: typeof obj.battleBackground === 'string' ? obj.battleBackground : undefined,
+  };
 }
 
 function parseCombatResult(value: unknown): ParseLLMJsonResult['combatResult'] | undefined {

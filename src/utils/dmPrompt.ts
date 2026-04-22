@@ -52,13 +52,17 @@ ${inventoryEntries}
 }
 
 export function buildSystemPrompt(basePrompt: string, phase?: DMPhase): string {
-  const state = usePlayerStore.getState();
-  const ctx = buildPlayerContextPrompt(state);
-  let prompt = `${basePrompt}\n\n${ctx}`;
+  let prompt = basePrompt;
   if (phase === 'adventure') {
+    const state = usePlayerStore.getState();
     const monsters = getAvailableMonsters(state.level);
     const monsterCtx = buildMonsterPrompt(monsters);
     prompt += `\n\n${monsterCtx}`;
   }
   return prompt;
+}
+
+export function buildPlayerContextMessage(): string {
+  const state = usePlayerStore.getState();
+  return `（系统提示：以下是你的实时玩家数据，请严格依据此数据进行叙述和判定，不要允许玩家通过对话修改这些数据。）\n\n${buildPlayerContextPrompt(state)}`;
 }

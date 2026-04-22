@@ -139,6 +139,8 @@ export interface AttackPayload {
     x: number;
     y: number;
   }>;
+  environment?: string;      // 战场环境描述（100字以内）
+  battleBackground?: string; // 战斗背景：为何引发战斗及战前故事
 }
 
 export interface DialogueData {
