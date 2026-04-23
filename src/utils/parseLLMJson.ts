@@ -1,3 +1,5 @@
+import type { CombatAction } from './combatEngine';
+
 export interface ParseLLMJsonResult {
   parsed?: Record<string, unknown>;
   dialogue?: string;
@@ -18,6 +20,7 @@ export interface ParseLLMJsonResult {
     outcome: 'victory' | 'defeat' | 'escape';
     battleSummary?: string;
   };
+  action?: CombatAction;
 }
 
 function stripMarkdownCodeBlocks(content: string): string {
@@ -279,10 +282,24 @@ function parseCombatResult(value: unknown): ParseLLMJsonResult['combatResult'] |
   if (!value || typeof value !== 'object') return undefined;
   const obj = value as Record<string, unknown>;
   const outcome = obj.outcome;
-  if (outcome !== 'victory' && outcome !== 'defeat' && outcome !== 'escape') return undefined;
+  if (outcome !== 'victory' && outcome !== 'defeat') return undefined;
   return {
     outcome,
     battleSummary: typeof obj.battleSummary === 'string' ? obj.battleSummary : undefined,
+  };
+}
+
+function parseAction(value: unknown): CombatAction | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const obj = value as Record<string, unknown>;
+  const type = obj.type;
+  if (type !== 'attack') return undefined;
+  return {
+    type: 'attack',
+    target: typeof obj.target === 'string' ? obj.target : '',
+    method: typeof obj.method === 'string' ? obj.method : '',
+    description: typeof obj.description === 'string' ? obj.description : '',
+    monster: typeof obj.monster === 'string' ? obj.monster : undefined,
   };
 }
 
@@ -299,10 +316,14 @@ function extractParsedFields(parsed: Record<string, unknown>): Omit<ParseLLMJson
     deductGold: typeof parsed.deductGold === 'number' ? parsed.deductGold : undefined,
     attack: parseAttack(parsed.attack),
     combatResult: parseCombatResult(parsed.combatResult),
+    action: parseAction(parsed.action),
   };
 }
 
 export function parseLLMJson(content: string): ParseLLMJsonResult {
+  if (!content || typeof content !== 'string') {
+    return { error: '输入内容为空或格式异常', dialogue: String(content ?? '') };
+  }
   const str = stripMarkdownCodeBlocks(content);
 
   // First attempt: direct parse

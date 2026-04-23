@@ -68,8 +68,16 @@ export async function chatWithNPC(
   }
 
   const data = await response.json();
+
+  // 防御性检查：确保 API 返回了预期的数据结构
+  const messageContent = data.choices?.[0]?.message?.content;
+  if (typeof messageContent !== 'string') {
+    logApiError('API 返回的数据结构异常', JSON.stringify({ data }, null, 2));
+    throw new Error('API 返回的响应内容为空或格式异常');
+  }
+
   const result: ChatResponse = {
-    content: data.choices[0].message.content,
+    content: messageContent,
     usage: {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,

@@ -41,6 +41,10 @@ function hasAnyWeapon(equipment: Equipment): boolean {
 
 const AUTO_SKILL_IDS = new Set(['skill_unarmed', 'skill_mainWeapon', 'skill_offWeapon', 'skill_ranged']);
 
+export function computeDefense(equipment: Equipment): number {
+  return equipment.shield?.defense ?? 10;
+}
+
 export function refreshWeaponSkills(equipment: Equipment, strength: number, currentSkills: Skill[]): Skill[] {
   const hasWeapon = hasAnyWeapon(equipment);
   let skills = currentSkills.filter((s) => !AUTO_SKILL_IDS.has(s.id));
@@ -93,6 +97,7 @@ export interface PlayerState {
   maxMp: number;
   exp: number;
   gold: number;
+  defense: number; // 防御值 = 盾牌防御值（装备中的），否则为10
   equipment: Equipment;
   inventory: Record<number, Item>; // 使用数字索引作为 key
   skills: Skill[];
@@ -135,6 +140,7 @@ const initialPlayerState = {
   maxMp: 50,
   exp: 0,
   gold: 0,
+  defense: 10,
   equipment: {},
   inventory: {},
   skills: [],
@@ -179,6 +185,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       equipment: {},
       inventory: {},
       skills: [buildUnarmedSkill(character.strength)],
+      defense: 10,
     });
   },
   resetPlayer: () => set(initialPlayerState),
@@ -280,11 +287,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     };
 
     const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
+    const newDefense = computeDefense(newEquipment);
 
     return {
       equipment: newEquipment,
       inventory: newInventory,
       skills: newSkills,
+      defense: newDefense,
     };
   }),
   unequipItem: (slotKey) => set((state) => {
@@ -297,14 +306,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       if (!newInventory[i]) {
         newInventory[i] = item;
         const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
-        return { equipment: newEquipment, inventory: newInventory, skills: newSkills };
+        const newDefense = computeDefense(newEquipment);
+        return { equipment: newEquipment, inventory: newInventory, skills: newSkills, defense: newDefense };
       }
     }
     // 背包满，自动扩展
     const newSlot = Object.keys(newInventory).length;
     newInventory[newSlot] = item;
     const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
-    return { equipment: newEquipment, inventory: newInventory, skills: newSkills };
+    const newDefense = computeDefense(newEquipment);
+    return { equipment: newEquipment, inventory: newInventory, skills: newSkills, defense: newDefense };
   }),
   organizeInventory: () => set((state) => {
     const items = Object.entries(state.inventory)

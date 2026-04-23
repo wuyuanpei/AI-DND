@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DialogueMessage, DialogueNode, WeaponPreset, ArmorPreset, AttackPayload } from '../types';
+import type { CombatMonsterState } from '../utils/combatEngine';
 
 export type DMPhase = 'creation' | 'shop' | 'adventure' | 'combat';
 
@@ -35,7 +36,12 @@ interface DialogueState {
   combatMonsterIds: string[];
   combatAttackPayload: AttackPayload | null;
   pendingAttack: AttackPayload | null;
-  pendingCombatResult: { outcome: 'victory' | 'defeat' | 'escape'; battleSummary?: string } | null;
+  pendingCombatResult: { outcome: 'victory' | 'defeat'; battleSummary?: string } | null;
+  // New combat engine state
+  combatMonsters: CombatMonsterState[];
+  combatTurn: 'player' | 'monster';
+  combatRound: number;
+  combatMonsterIndex: number; // 当前行动怪物的索引（怪物回合时使用）
 
   // Actions
   openDialogue: (npcId: string, npcName: string, nodes: DialogueNode[], startNode: string) => void;
@@ -70,6 +76,10 @@ const initialDialogueState = {
   combatAttackPayload: null,
   pendingAttack: null,
   pendingCombatResult: null,
+  combatMonsters: [] as CombatMonsterState[],
+  combatTurn: 'player' as const,
+  combatRound: 1,
+  combatMonsterIndex: 0,
 };
 
 export const useDialogueStore = create<DialogueState>((set) => ({

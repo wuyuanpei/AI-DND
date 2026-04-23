@@ -8,7 +8,7 @@ export function buildPlayerContextPrompt(state: PlayerState): string {
     .join('\n') || '  （无）';
 
   const skillEntries = state.skills
-    .map((skill, idx) => `  ${idx + 1}. ${skill.name}${skill.type === 'active' ? '（主动）' : '（被动）'}`)
+    .map((skill, idx) => `  ${idx + 1}. ID: ${skill.id}, 名称: ${skill.name}${skill.type === 'active' ? '（主动）' : '（被动）'}${skill.damage ? `, 伤害: ${skill.damage}` : ''}`)
     .join('\n') || '  （无）';
 
   const inventoryEntries = Object.entries(state.inventory)

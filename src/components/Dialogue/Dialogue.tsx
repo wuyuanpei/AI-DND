@@ -17,6 +17,16 @@ import type { ChatMessage } from '../../services/qwen';
 import type { DialogueMessage, Item } from '../../types';
 import type { CharacterData } from '../../store/playerStore';
 import { parseLLMJson } from '../../utils/parseLLMJson';
+import {
+  type CombatMonsterState,
+  type CombatAction,
+  type AttackResult,
+  resolvePlayerAttack,
+  resolveMonsterAttack,
+  buildPlayerAttackResolutionMessage,
+  buildMonsterAttackResolutionMessage,
+  getDamageBySkillId,
+} from '../../utils/combatEngine';
 import weaponsData from '../../data/weapons.json';
 import armorsData from '../../data/armors.json';
 
@@ -42,6 +52,111 @@ const getCombatSystemPromptForAttack = (attack: { monsters: Array<{ id: string; 
     .map(m => (monstersData as { monsters: Array<{ id: string; name: string; hp: number; defense: number; strength: number; agility: number; intelligence: number; charisma: number; expReward: number; skills: Array<{ name: string; rangeType: string; damage: string }> }> }).monsters.find(mo => mo.id === m.id))
     .filter(Boolean);
   return buildCombatSystemPrompt(monsters as Parameters<typeof buildCombatSystemPrompt>[0], attack);
+};
+
+// 从 attack payload 构建战斗怪物状态
+const buildCombatMonsters = (attack: { monsters: Array<{ id: string; x: number; y: number }> }): CombatMonsterState[] => {
+  const idCounts = new Map<string, number>();
+  return attack.monsters.map((am) => {
+    const count = idCounts.get(am.id) ?? 0;
+    idCounts.set(am.id, count + 1);
+    const uniqueId = `${am.id}_${count + 1}`;
+    const m = (monstersData as { monsters: Array<{ id: string; name: string; hp: number; defense: number; strength: number; agility: number; skills: Array<{ name: string; rangeType: string; damage: string }> }> }).monsters.find(mo => mo.id === am.id);
+    return {
+      uniqueId,
+      prototypeId: am.id,
+      name: m?.name ?? '未知怪物',
+      currentHp: m?.hp ?? 10,
+      maxHp: m?.hp ?? 10,
+      defense: m?.defense ?? 10,
+      strength: m?.strength ?? 10,
+      agility: m?.agility ?? 10,
+      skills: m?.skills ?? [],
+      x: am.x,
+      y: am.y,
+    };
+  });
+};
+
+// 获取当前战斗状态文本，追加到消息末尾
+const getCombatStatusAppendix = (): string => {
+  const state = useDialogueStore.getState();
+  if (state.dmPhase !== 'combat' || state.combatMonsters.length === 0) return '';
+  const { combatRound, combatTurn, combatMonsters, combatMonsterIndex } = state;
+
+  let turnText: string;
+  if (combatTurn === 'player') {
+    turnText = '玩家回合';
+  } else {
+    const actingMonster = combatMonsters[combatMonsterIndex];
+    turnText = actingMonster ? `${actingMonster.name}（${actingMonster.uniqueId}）回合` : '怪物回合';
+  }
+
+  const playerState = usePlayerStore.getState();
+  const playerStatus = `玩家 HP：${playerState.hp} / ${playerState.maxHp}，防御：${playerState.defense}`;
+
+  const monsterStatus = combatMonsters
+    .map(m => `- ${m.name}（${m.uniqueId}）: HP ${m.currentHp}/${m.maxHp}, 防御 ${m.defense}, 力量 ${m.strength}, 敏捷 ${m.agility}, 坐标 (${m.x}, ${m.y})\n  技能: ${m.skills.map(s => `${s.name}(${s.rangeType}, ${s.damage})`).join('、')}`)
+    .join('\n');
+
+  return `【战斗状态】第 ${combatRound} 回合 — ${turnText}\n${playerStatus}\n怪物状态：\n${monsterStatus}`;
+};
+
+// 解析并执行战斗行动
+const executeCombatAction = (action: CombatAction, isPlayerTurn: boolean, actingMonsterId?: string): { message: string; combatEnded: boolean; outcome?: 'victory' | 'defeat' } => {
+  const playerState = usePlayerStore.getState();
+  const dialogueState = useDialogueStore.getState();
+  const monsters = [...dialogueState.combatMonsters];
+
+  if (isPlayerTurn) {
+    // 玩家回合：只有攻击
+    const skillDamage = getDamageBySkillId(playerState.skills, action.method);
+    const result = resolvePlayerAttack(
+      action,
+      playerState.strength,
+      playerState.agility,
+      monsters,
+      skillDamage
+    );
+    // 更新怪物状态
+    useDialogueStore.setState({ combatMonsters: monsters });
+
+    const resolutionMsg = buildPlayerAttackResolutionMessage(result, action);
+
+    // 检查是否所有怪物死亡
+    const allDead = monsters.every(m => m.currentHp <= 0);
+    if (allDead) {
+      return { message: resolutionMsg, combatEnded: true, outcome: 'victory' };
+    }
+    return { message: resolutionMsg, combatEnded: false };
+  } else {
+    // 怪物回合
+    const monsterId = actingMonsterId || action.monster || '';
+    const monsterAction: CombatAction = {
+      ...action,
+      monster: monsterId,
+    };
+    const result = resolveMonsterAttack(
+      monsterAction,
+      monsters
+    );
+
+    // 更新玩家 HP
+    if (result.hit) {
+      const newHp = Math.max(0, playerState.hp - result.damage);
+      usePlayerStore.setState({ hp: newHp });
+      savePlayerStatsToStorage();
+    }
+
+    const resolutionMsg = buildMonsterAttackResolutionMessage(result, action);
+
+    // 检查玩家是否死亡
+    const currentHp = usePlayerStore.getState().hp;
+    if (currentHp <= 0) {
+      return { message: resolutionMsg, combatEnded: true, outcome: 'defeat' };
+    }
+    return { message: resolutionMsg, combatEnded: false };
+  }
 };
 
 const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, shopArmors: Array<Record<string, unknown>>, purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
@@ -134,6 +249,10 @@ const Dialogue: React.FC = () => {
         const pendingCombatResult = localStorage.getItem('pending_combat_result');
         const savedAttackPayload = localStorage.getItem('combat_attack_payload');
         const attackPayload = savedAttackPayload ? JSON.parse(savedAttackPayload) : null;
+        const savedMonsters = localStorage.getItem('combat_monsters');
+        const savedTurn = localStorage.getItem('combat_turn') as 'player' | 'monster' | null;
+        const savedRound = localStorage.getItem('combat_round');
+        const savedMonsterIndex = localStorage.getItem('combat_monster_index');
         if (savedKey && preCombat) {
           const combatHistory = await loadDialogueHistory(savedKey);
           useDialogueStore.setState({
@@ -144,6 +263,10 @@ const Dialogue: React.FC = () => {
             pendingCombatResult: pendingCombatResult ? JSON.parse(pendingCombatResult) : null,
             combatAttackPayload: attackPayload,
             combatMonsterIds: attackPayload ? attackPayload.monsters.map((m: { id: string }) => m.id) : [],
+            combatMonsters: savedMonsters ? JSON.parse(savedMonsters) : [],
+            combatTurn: savedTurn ?? 'player',
+            combatRound: savedRound ? parseInt(savedRound, 10) : 1,
+            combatMonsterIndex: savedMonsterIndex ? parseInt(savedMonsterIndex, 10) : 0,
           });
           if (combatHistory && combatHistory.length > 0) {
             for (let i = combatHistory.length - 1; i >= 0; i--) {
@@ -316,6 +439,15 @@ const Dialogue: React.FC = () => {
     }
   }, [restored, store.dmPhase, store.combatHistoryKey, messages]);
 
+  // 战斗状态变化时持久化到 localStorage
+  useEffect(() => {
+    if (store.dmPhase !== 'combat') return;
+    localStorage.setItem('combat_monsters', JSON.stringify(store.combatMonsters));
+    localStorage.setItem('combat_turn', store.combatTurn);
+    localStorage.setItem('combat_round', String(store.combatRound));
+    localStorage.setItem('combat_monster_index', String(store.combatMonsterIndex));
+  }, [store.dmPhase, store.combatMonsters, store.combatTurn, store.combatRound, store.combatMonsterIndex]);
+
   // 获取当前对话节点
   const currentNode = nodes.find((n) => n.id === currentNodeId);
 
@@ -391,8 +523,14 @@ const Dialogue: React.FC = () => {
     const currentPlayerIsCreated = usePlayerStore.getState().isCreated;
     const npcName = getDMName(useDialogueStore.getState().dmPhase);
 
+    const currentPhase = useDialogueStore.getState().dmPhase;
+
     // 获取当前 messages（用于构建 history）
-    const historyMessages: DialogueMessage[] = useDialogueStore.getState().messages.filter((m) => m.role !== 'system');
+    // 战斗阶段保留系统消息（包含战斗判定结果），其他阶段过滤系统消息
+    const historyMessages: DialogueMessage[] = useDialogueStore.getState().messages.filter((m) => {
+      if (currentPhase === 'combat') return true;
+      return m.role !== 'system';
+    });
 
     if (showUserMessage) {
       setLoading(true);
@@ -402,7 +540,6 @@ const Dialogue: React.FC = () => {
     }
 
     try {
-      const currentPhase = useDialogueStore.getState().dmPhase;
       const ctxMsg = currentPhase !== 'creation' ? buildPlayerContextMessage() : '';
 
       // 构建 history：给每条 user 消息追加实时数据
@@ -418,7 +555,15 @@ const Dialogue: React.FC = () => {
       });
 
       // 当前消息也追加实时数据
-      const finalUserMessage = ctxMsg ? `${userMessage}\n\n${ctxMsg}` : userMessage;
+      let finalUserMessage = ctxMsg ? `${userMessage}\n\n${ctxMsg}` : userMessage;
+
+      // 战斗阶段：追加战斗状态到消息末尾
+      if (currentPhase === 'combat') {
+        const statusAppendix = getCombatStatusAppendix();
+        if (statusAppendix) {
+          finalUserMessage = `${finalUserMessage}\n\n${statusAppendix}`;
+        }
+      }
 
       const response = await chatWithNPC(
         npcName,
@@ -430,6 +575,12 @@ const Dialogue: React.FC = () => {
         apiUrl
       );
       addApiUsage(response.usage);
+
+      // 防御性检查：确保响应内容存在
+      if (!response.content || typeof response.content !== 'string') {
+        throw new Error('API 返回的响应内容为空');
+      }
+
       let replyContent = response.content;
 
       let result = parseLLMJson(response.content);
@@ -494,15 +645,15 @@ const Dialogue: React.FC = () => {
         replyContent = result.dialogue.trim();
       }
 
-      // 提取 options
-      if (result.options) {
+      // 商店阶段 → 冒险阶段
+      const dmPhase = useDialogueStore.getState().dmPhase;
+
+      // 提取 options（战斗行动意图消息不显示选项）
+      if (result.options && !(dmPhase === 'combat' && result.action)) {
         setOptions(result.options);
       } else {
         setOptions([]);
       }
-
-      // 商店阶段 → 冒险阶段
-      const dmPhase = useDialogueStore.getState().dmPhase;
       if (dmPhase === 'shop' && result.startAdventure) {
         addMessage({ role: 'assistant', content: replyContent, rawJson: response.content });
 
@@ -689,7 +840,117 @@ const Dialogue: React.FC = () => {
         return;
       }
 
-      // 战斗阶段：处理 combatResult 字段（标记待返回冒险，用户需手动确认）
+      // 战斗阶段：处理 combatResult 字段（战斗结束，标记待返回冒险）
+      if (dmPhase === 'combat' && result.combatResult) {
+        const combatResult = result.combatResult;
+        let combatRewardExp: number | undefined;
+
+        // 胜利时由代码根据怪物数据计算经验奖励（所有怪物 expReward 之和）
+        if (combatResult.outcome === 'victory') {
+          const monsterIds = useDialogueStore.getState().combatMonsterIds;
+          const totalExp = (monstersData as { monsters: Array<{ id: string; expReward: number }> }).monsters
+            .filter((m) => monsterIds.includes(m.id))
+            .reduce((sum, m) => sum + m.expReward, 0);
+          if (totalExp > 0) {
+            const beforeLevel = usePlayerStore.getState().level;
+            usePlayerStore.getState().addExp(totalExp);
+            combatRewardExp = totalExp;
+            if (usePlayerStore.getState().level > beforeLevel) {
+              leveledUp = true;
+            }
+          }
+        }
+        savePlayerStatsToStorage();
+
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content, rewardExp: combatRewardExp, leveledUp });
+
+        // 保存战斗历史
+        if (store.combatHistoryKey) {
+          void saveCombatState(store.combatHistoryKey, useDialogueStore.getState().messages.filter((m) => m.role !== 'system')).catch(() => {});
+        }
+
+        // 标记待返回冒险，不立即恢复 DM
+        localStorage.setItem('pending_combat_result', JSON.stringify(combatResult));
+        useDialogueStore.setState({ pendingCombatResult: combatResult });
+        setOptions([]);
+        return;
+      }
+
+      // 战斗阶段：处理 action 字段（新的战斗行动解析流程）
+      if (dmPhase === 'combat' && result.action) {
+        const isPlayerTurn = useDialogueStore.getState().combatTurn === 'player';
+        const { combatMonsters, combatMonsterIndex } = useDialogueStore.getState();
+        const actingMonsterId = isPlayerTurn ? undefined : combatMonsters[combatMonsterIndex]?.uniqueId;
+
+        // 添加行动意图消息（combatAction 标记，UI 中不直接显示）
+        addMessage({ role: 'assistant', content: replyContent, rawJson: response.content, combatAction: true });
+
+        // 执行行动判定
+        const execResult = executeCombatAction(result.action, isPlayerTurn, actingMonsterId);
+
+        // 添加系统判定消息
+        addMessage({ role: 'system', content: execResult.message });
+
+        // 检查战斗结束
+        if (execResult.combatEnded && execResult.outcome) {
+          // 战斗结束，要求 LLM 生成 combatResult
+          const endPrompt = `（系统：战斗已结束，结果：${execResult.outcome}。怪物最终状态：${useDialogueStore.getState().combatMonsters.map(m => `${m.name} HP ${m.currentHp}/${m.maxHp}`).join('，')}。玩家 HP：${usePlayerStore.getState().hp}/${usePlayerStore.getState().maxHp}。请生成战斗结束总结，包含 combatResult 字段。）`;
+          await sendToLLM(systemPrompt, endPrompt, false);
+          return;
+        }
+
+        // 切换回合
+        if (isPlayerTurn) {
+          // 玩家回合结束，切换到怪物回合
+          const aliveMonsters = useDialogueStore.getState().combatMonsters.filter(m => m.currentHp > 0);
+          if (aliveMonsters.length === 0) {
+            // 所有怪物已死，应该已在上面处理
+            return;
+          }
+
+          // 找到第一个存活的怪物
+          const monsters = useDialogueStore.getState().combatMonsters;
+          let nextMonsterIdx = 0;
+          while (nextMonsterIdx < monsters.length && monsters[nextMonsterIdx].currentHp <= 0) {
+            nextMonsterIdx++;
+          }
+          useDialogueStore.setState({ combatTurn: 'monster', combatMonsterIndex: nextMonsterIdx });
+
+          const actingMonster = monsters[nextMonsterIdx];
+          const statusAppendix = getCombatStatusAppendix();
+          const monsterTurnMsg = `（系统：现在是 ${actingMonster.name}（${actingMonster.uniqueId}）的回合。请为其生成行动。）\n\n${statusAppendix}`;
+          await sendToLLM(systemPrompt, monsterTurnMsg, false);
+          return;
+        } else {
+          // 怪物回合结束，检查是否还有怪物需要行动
+          const monsters = useDialogueStore.getState().combatMonsters;
+          let nextMonsterIdx = combatMonsterIndex + 1;
+          while (nextMonsterIdx < monsters.length && monsters[nextMonsterIdx].currentHp <= 0) {
+            nextMonsterIdx++;
+          }
+
+          if (nextMonsterIdx < monsters.length) {
+            // 还有怪物需要行动
+            useDialogueStore.setState({ combatMonsterIndex: nextMonsterIdx });
+            const actingMonster = monsters[nextMonsterIdx];
+            const statusAppendix = getCombatStatusAppendix();
+            const monsterTurnMsg = `（系统：现在是 ${actingMonster.name}（${actingMonster.uniqueId}）的回合。请为其生成行动。）\n\n${statusAppendix}`;
+            await sendToLLM(systemPrompt, monsterTurnMsg, false);
+            return;
+          } else {
+            // 所有怪物已行动，切换回玩家回合
+            const newRound = useDialogueStore.getState().combatRound + 1;
+            useDialogueStore.setState({ combatTurn: 'player', combatRound: newRound, combatMonsterIndex: 0 });
+
+            const statusAppendix = getCombatStatusAppendix();
+            const playerTurnMsg = `（系统：所有怪物已行动完毕。现在又是玩家回合。请根据当前战况向玩家描述场面，并等待玩家输入下一步行动。注意：你只需要描述场面，不要替玩家决定行动。）\n\n${statusAppendix}`;
+            await sendToLLM(systemPrompt, playerTurnMsg, false);
+            return;
+          }
+        }
+      }
+
+      // 战斗阶段：处理 combatResult 字段（战斗结束，标记待返回冒险）
       if (dmPhase === 'combat' && result.combatResult) {
         const combatResult = result.combatResult;
         let combatRewardExp: number | undefined;
@@ -789,7 +1050,10 @@ const Dialogue: React.FC = () => {
 
       addMessage({ role: 'assistant', content: replyContent, rawJson: response.content, rewardGold: advRewardGold, rewardExp: advRewardExp, deductGold: advDeductGold, leveledUp });
     } catch (error) {
-      addMessage({ role: 'assistant', content: '（对话出错...）' });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error('sendToLLM error:', error);
+      logError('LLM 对话处理出错', errorMsg);
+      addMessage({ role: 'assistant', content: `（对话出错：${errorMsg}）` });
     } finally {
       setLoading(false);
     }
@@ -837,6 +1101,13 @@ const Dialogue: React.FC = () => {
     localStorage.setItem('pre_combat_messages', JSON.stringify(preCombatMsgs));
     localStorage.setItem('combat_attack_payload', JSON.stringify(attack));
 
+    // 初始化战斗怪物状态
+    const combatMonsters = buildCombatMonsters(attack);
+    localStorage.setItem('combat_monsters', JSON.stringify(combatMonsters));
+    localStorage.setItem('combat_turn', 'player');
+    localStorage.setItem('combat_round', '1');
+    localStorage.setItem('combat_monster_index', '0');
+
     useDialogueStore.setState({
       dmPhase: 'combat',
       combatHistoryKey: combatKey,
@@ -845,14 +1116,19 @@ const Dialogue: React.FC = () => {
       combatAttackPayload: attack,
       pendingAttack: null,
       messages: [],
+      combatMonsters,
+      combatTurn: 'player',
+      combatRound: 1,
+      combatMonsterIndex: 0,
     });
     void saveDMPhase('combat').catch(() => {});
     localStorage.removeItem('pending_attack');
 
     const combatSystemPrompt = getCombatSystemPromptForAttack(attack);
+    const statusAppendix = getCombatStatusAppendix();
     await sendToLLM(
       combatSystemPrompt,
-      '（玩家遭遇了怪物，准备开始战斗。请描述战斗开场并给出初始选项。）',
+      `（玩家遭遇了怪物，准备开始战斗。请描述战斗开场。当前是第1回合，玩家先行动。）\n\n${statusAppendix}`,
       false
     );
   };
@@ -886,12 +1162,20 @@ const Dialogue: React.FC = () => {
       combatMonsterIds: [],
       combatAttackPayload: null,
       pendingCombatResult: null,
+      combatMonsters: [],
+      combatTurn: 'player',
+      combatRound: 1,
+      combatMonsterIndex: 0,
     });
     void saveDMPhase('adventure').catch(() => {});
     localStorage.removeItem('combat_history_key');
     localStorage.removeItem('pre_combat_messages');
     localStorage.removeItem('combat_attack_payload');
     localStorage.removeItem('pending_combat_result');
+    localStorage.removeItem('combat_monsters');
+    localStorage.removeItem('combat_turn');
+    localStorage.removeItem('combat_round');
+    localStorage.removeItem('combat_monster_index');
 
     await sendToLLM(
       getSystemPromptForDM('adventure'),
@@ -1158,7 +1442,7 @@ const Dialogue: React.FC = () => {
             )}
 
             {messages
-              .filter((m) => m.role !== 'system')
+              .filter((m) => m.role !== 'system' && !m.combatAction)
               .map((msg, idx) => (
                 <div key={idx}>
                   <div

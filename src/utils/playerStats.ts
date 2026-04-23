@@ -1,4 +1,4 @@
-import { usePlayerStore, refreshWeaponSkills } from '../store/playerStore';
+import { usePlayerStore, refreshWeaponSkills, computeDefense } from '../store/playerStore';
 import { savePlayerJson } from './playerDB';
 import type { Equipment, Skill } from '../types';
 
@@ -15,6 +15,7 @@ export function savePlayerStatsToStorage(): void {
     maxMp: s.maxMp,
     exp: s.exp,
     gold: s.gold,
+    defense: s.defense,
     equipment: s.equipment,
     inventory: s.inventory,
     skills: s.skills,
@@ -35,6 +36,7 @@ export function loadPlayerStatsFromStorage(): boolean {
     const strength = stats.strength || 10;
     const loadedSkills = (stats.skills || []) as Skill[];
     const syncedSkills = refreshWeaponSkills(equipment, strength, loadedSkills);
+    const syncedDefense = computeDefense(equipment);
 
     usePlayerStore.setState({
       isCreated: stats.isCreated,
@@ -45,6 +47,7 @@ export function loadPlayerStatsFromStorage(): boolean {
       maxMp: stats.maxMp,
       exp: stats.exp,
       gold: stats.gold,
+      defense: syncedDefense,
       equipment: stats.equipment,
       inventory: stats.inventory,
       skills: syncedSkills,

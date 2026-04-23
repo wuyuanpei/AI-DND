@@ -2,7 +2,7 @@ import React from 'react';
 import { usePlayerStore, getExpToNext, MAX_LEVEL } from '../../store/playerStore';
 
 const Stats: React.FC = () => {
-  const { name, level, hp, maxHp, mp, maxMp, exp, gold, strength, agility, intelligence, charisma, avatar } = usePlayerStore();
+  const { name, level, hp, maxHp, mp, maxMp, exp, gold, defense, strength, agility, intelligence, charisma, avatar } = usePlayerStore();
 
   const hpPercent = (hp / maxHp) * 100;
   const mpPercent = (mp / maxMp) * 100;
@@ -59,10 +59,13 @@ const Stats: React.FC = () => {
         </div>
       </div>
 
-      {/* 金币 */}
-      <div className="flex-shrink-0 text-center py-1">
+      {/* 金币和防御 */}
+      <div className="flex-shrink-0 text-center py-1 flex justify-center gap-4">
         <div className="text-yellow-400 text-sm">
           💰 {gold} 金币
+        </div>
+        <div className="text-gray-300 text-sm">
+          🛡️ 防御 {defense}
         </div>
       </div>
 

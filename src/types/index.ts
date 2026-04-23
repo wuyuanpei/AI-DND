@@ -89,6 +89,7 @@ export interface DialogueMessage {
   rewardExp?: number;
   deductGold?: number;
   leveledUp?: boolean;
+  combatAction?: boolean; // 标记为战斗行动意图消息（不直接显示给用户，仅用于LLM上下文）
 }
 
 export interface DialogueChoice {
