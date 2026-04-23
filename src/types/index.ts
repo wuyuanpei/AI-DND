@@ -76,6 +76,8 @@ export interface Skill {
   type: 'active' | 'passive';
   cost?: number; // MP消耗
   cooldown?: number;
+  damage?: string; // 伤害值
+  icon?: string; // 图标路径
 }
 
 // 对话系统

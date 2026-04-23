@@ -127,9 +127,12 @@ const Inventory: React.FC = () => {
               return (
                 <div
                   key={idx}
-                  className="aspect-square bg-gray-700 rounded border border-gray-600 flex items-center justify-center"
+                  data-slot={idx}
+                  className="flex flex-col items-center"
                 >
-                  <span className="text-gray-600 text-sm">空</span>
+                  <div className="relative aspect-square w-full rounded-lg border-2 border-gray-600 hover:border-yellow-400 transition-colors bg-gray-700 flex items-center justify-center overflow-hidden">
+                    <span className="text-gray-600 text-sm">空</span>
+                  </div>
                 </div>
               );
             }
@@ -145,51 +148,59 @@ const Inventory: React.FC = () => {
                 onMouseEnter={() => handleMouseEnterSlot(idx)}
                 onMouseLeave={handleMouseLeaveSlot}
               >
-                <div className={`aspect-square bg-gray-700 rounded border-2 ${rarityBorder} flex flex-col items-center justify-center cursor-pointer hover:brightness-110 transition`}>
-                  {item.icon ? (
-                    <div className="relative">
-                      <img src={`/${item.icon}`} alt={item.name} className="w-12 h-12 object-contain" />
-                      <span className="absolute bottom-0 right-0 text-[11px] text-white font-bold bg-black/90 rounded px-0.5 leading-tight shadow">
-                        x{count}
-                      </span>
-                      {(() => {
-                        const isMelee = item.weaponType === 'melee';
-                        const isRanged = item.weaponType === 'ranged';
-                        if (isMelee || isRanged) {
-                          return (
-                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-red-800/90 text-red-100 rounded px-0.5 leading-tight shadow">
-                              ⚔{item.damage}
-                            </span>
-                          );
-                        }
-                        if (item.type === 'helmet' && item.damageReduction !== undefined) {
-                          return (
-                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-amber-800/90 text-amber-100 rounded px-0.5 leading-tight shadow">
-                              🛡{Math.round(item.damageReduction * 100)}%
-                            </span>
-                          );
-                        }
-                        if (item.type === 'chest' && item.bonusHp !== undefined) {
-                          return (
-                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-green-800/90 text-green-100 rounded px-0.5 leading-tight shadow">
-                              ❤{item.bonusHp}
-                            </span>
-                          );
-                        }
-                        if (item.type === 'shield' && item.defense !== undefined) {
-                          return (
-                            <span className="absolute top-0 right-0 text-[9px] font-bold bg-blue-800/90 text-blue-100 rounded px-0.5 leading-tight shadow">
-                              🛡{item.defense}
-                            </span>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  ) : (
-                    <span className="text-gray-400 text-lg">?</span>
-                  )}
-                  <span className="text-white text-[11px] text-center leading-tight mt-0.5 px-1">{item.name}</span>
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`relative aspect-square w-full rounded-lg border-2 overflow-hidden transition-colors bg-gray-700 flex items-center justify-center cursor-pointer hover:border-yellow-400 ${rarityBorder}`}
+                  >
+                    {item.icon ? (
+                      <>
+                        <img
+                          src={`/${item.icon}`}
+                          alt={item.name}
+                          className="w-full h-full object-contain p-0.5 rounded-lg"
+                        />
+                        <span className="absolute bottom-0.5 right-0.5 text-[10px] text-white font-bold bg-black/90 rounded px-1 py-0.5 leading-tight shadow">
+                          x{count}
+                        </span>
+                        {(() => {
+                          const isMelee = item.weaponType === 'melee';
+                          const isRanged = item.weaponType === 'ranged';
+                          if (isMelee || isRanged) {
+                            return (
+                              <span className="absolute top-0.5 right-0.5 text-[10px] font-bold bg-red-800/90 text-red-100 rounded px-1 py-0.5 leading-tight shadow">
+                                ⚔{item.damage}
+                              </span>
+                            );
+                          }
+                          if (item.type === 'helmet' && item.damageReduction !== undefined) {
+                            return (
+                              <span className="absolute top-0.5 right-0.5 text-[10px] font-bold bg-amber-800/90 text-amber-100 rounded px-1 py-0.5 leading-tight shadow">
+                                🛡{Math.round(item.damageReduction * 100)}%
+                              </span>
+                            );
+                          }
+                          if (item.type === 'chest' && item.bonusHp !== undefined) {
+                            return (
+                              <span className="absolute top-0.5 right-0.5 text-[10px] font-bold bg-green-800/90 text-green-100 rounded px-1 py-0.5 leading-tight shadow">
+                                ❤{item.bonusHp}
+                              </span>
+                            );
+                          }
+                          if (item.type === 'shield' && item.defense !== undefined) {
+                            return (
+                              <span className="absolute top-0.5 right-0.5 text-[10px] font-bold bg-blue-800/90 text-blue-100 rounded px-1 py-0.5 leading-tight shadow">
+                                🛡{item.defense}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </>
+                    ) : (
+                      <span className="text-gray-400 text-lg">?</span>
+                    )}
+                  </div>
+                  <span className="text-white text-xs text-center mt-1 truncate w-full px-0.5 leading-tight">{item.name}</span>
                 </div>
               </div>
             );

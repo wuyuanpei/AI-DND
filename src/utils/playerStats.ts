@@ -1,5 +1,6 @@
-import { usePlayerStore } from '../store/playerStore';
+import { usePlayerStore, refreshWeaponSkills } from '../store/playerStore';
 import { savePlayerJson } from './playerDB';
+import type { Equipment, Skill } from '../types';
 
 const PLAYER_STATS_KEY = 'ai-dnd-player-stats';
 
@@ -29,6 +30,12 @@ export function loadPlayerStatsFromStorage(): boolean {
   if (!raw) return false;
   try {
     const stats = JSON.parse(raw);
+    // 根据装备重新计算武器技能，防止 localStorage 中的技能数据与装备不同步
+    const equipment = (stats.equipment || {}) as Equipment;
+    const strength = stats.strength || 10;
+    const loadedSkills = (stats.skills || []) as Skill[];
+    const syncedSkills = refreshWeaponSkills(equipment, strength, loadedSkills);
+
     usePlayerStore.setState({
       isCreated: stats.isCreated,
       level: stats.level,
@@ -40,7 +47,7 @@ export function loadPlayerStatsFromStorage(): boolean {
       gold: stats.gold,
       equipment: stats.equipment,
       inventory: stats.inventory,
-      skills: stats.skills,
+      skills: syncedSkills,
       strength: stats.strength,
       agility: stats.agility,
       intelligence: stats.intelligence,

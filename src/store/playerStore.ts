@@ -3,19 +3,64 @@ import type { Equipment, Item, Skill } from '../types';
 
 // 背包格子数量
 export const INVENTORY_SLOTS = 28;
-// 技能格子数量 - 基础 3 个，每级 +1
-export const BASE_SKILL_SLOTS = 3;
 // 最大等级
 export const MAX_LEVEL = 10;
 
-/**
- * 计算技能上限：基础 3 个 + 每级 +1，满级 10 级时 12 个
- * 公式：3 + (等级 - 1) = 2 + 等级
- */
-export const getSkillCap = (level: number): number => {
-  const cap = BASE_SKILL_SLOTS + (level - 1);
-  return Math.min(cap, BASE_SKILL_SLOTS + (MAX_LEVEL - 1)); // 最多 12 个
+const WEAPON_SKILL_NAMES: Record<string, string> = {
+  mainWeapon: '近战-主武',
+  offWeapon: '近战-副武',
+  ranged: '远程武器',
 };
+
+function buildUnarmedSkill(strength: number): Skill {
+  return {
+    id: 'skill_unarmed',
+    name: '赤手空拳',
+    description: '不使用武器，仅凭肉身之力进行攻击。伤害为力量除以2，向下取整。',
+    type: 'active',
+    damage: `${Math.floor(strength / 2)}`,
+    icon: 'skills/skill_unarmed.png',
+  };
+}
+
+function buildWeaponSkill(item: Item): Skill {
+  const name = WEAPON_SKILL_NAMES[item.type] || item.name;
+  return {
+    id: `skill_${item.type}`,
+    name,
+    description: `使用${item.name}进行攻击。${item.description}`,
+    type: 'active',
+    damage: item.damage,
+    icon: item.icon ? `skills/skill_${item.type}.png` : undefined,
+  };
+}
+
+function hasAnyWeapon(equipment: Equipment): boolean {
+  return !!(equipment.mainWeapon || equipment.offWeapon || equipment.ranged);
+}
+
+const AUTO_SKILL_IDS = new Set(['skill_unarmed', 'skill_mainWeapon', 'skill_offWeapon', 'skill_ranged']);
+
+export function refreshWeaponSkills(equipment: Equipment, strength: number, currentSkills: Skill[]): Skill[] {
+  const hasWeapon = hasAnyWeapon(equipment);
+  let skills = currentSkills.filter((s) => !AUTO_SKILL_IDS.has(s.id));
+
+  if (hasWeapon) {
+    if (equipment.mainWeapon) {
+      skills.push(buildWeaponSkill(equipment.mainWeapon));
+    }
+    if (equipment.offWeapon) {
+      skills.push(buildWeaponSkill(equipment.offWeapon));
+    }
+    if (equipment.ranged) {
+      skills.push(buildWeaponSkill(equipment.ranged));
+    }
+  } else {
+    skills.push(buildUnarmedSkill(strength));
+  }
+
+  return skills;
+}
 
 /**
  * 计算从当前等级升到下一级所需的经验值
@@ -133,7 +178,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       gold,
       equipment: {},
       inventory: {},
-      skills: [],
+      skills: [buildUnarmedSkill(character.strength)],
     });
   },
   resetPlayer: () => set(initialPlayerState),
@@ -229,12 +274,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       newInventory[firstEmptySlot] = oldEquipped;
     }
 
+    const newEquipment = {
+      ...state.equipment,
+      [item.type]: item
+    };
+
+    const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
+
     return {
-      equipment: {
-        ...state.equipment,
-        [item.type]: item
-      },
-      inventory: newInventory
+      equipment: newEquipment,
+      inventory: newInventory,
+      skills: newSkills,
     };
   }),
   unequipItem: (slotKey) => set((state) => {
@@ -246,13 +296,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     for (let i = 0; i < INVENTORY_SLOTS; i++) {
       if (!newInventory[i]) {
         newInventory[i] = item;
-        return { equipment: newEquipment, inventory: newInventory };
+        const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
+        return { equipment: newEquipment, inventory: newInventory, skills: newSkills };
       }
     }
     // 背包满，自动扩展
     const newSlot = Object.keys(newInventory).length;
     newInventory[newSlot] = item;
-    return { equipment: newEquipment, inventory: newInventory };
+    const newSkills = refreshWeaponSkills(newEquipment, state.strength, state.skills);
+    return { equipment: newEquipment, inventory: newInventory, skills: newSkills };
   }),
   organizeInventory: () => set((state) => {
     const items = Object.entries(state.inventory)
