@@ -13,8 +13,7 @@ const Spells: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const learnedCount = skills.length;
-  const slotCount = Math.max(DEFAULT_SKILL_SLOTS, learnedCount);
+  const slotCount = Math.max(DEFAULT_SKILL_SLOTS, skills.length);
   const skillSlots = Array.from({ length: slotCount }, (_, i) => skills[i]);
 
   const updateTooltipPosition = useCallback((el: HTMLElement) => {
@@ -56,7 +55,6 @@ const Spells: React.FC = () => {
           技能
           <span className="text-gray-500 text-[10px] font-normal ml-1">鼠标悬浮查看详情</span>
         </h3>
-        <span className="text-sm text-gray-400">{learnedCount}</span>
       </div>
       <div className="flex-1 overflow-y-auto min-h-0" ref={containerRef}>
         <div className="grid grid-cols-3 gap-2 content-start">
