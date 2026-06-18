@@ -50,7 +50,6 @@ const Inventory: React.FC = () => {
     itemCounts[item.id] = (itemCounts[item.id] ?? 0) + 1;
   }
 
-  const shownSlots = new Set<number>(Object.keys(slotItems).map(Number));
   const slotKeys = Object.keys(slotItems).map(Number);
   const maxSlot = slotKeys.length > 0 ? Math.max(...slotKeys) : 0;
   const minSlots = 30;
@@ -217,7 +216,6 @@ const Inventory: React.FC = () => {
         const isHelmet = item.type === 'helmet';
         const isChest = item.type === 'chest';
         const isShield = item.type === 'shield';
-        const isArmor = isHelmet || isChest || isShield;
         const typeLabel = isMelee ? '近战武器' : isRanged ? '远程武器' : isHelmet ? '头盔' : isChest ? '护甲' : isShield ? '盾牌' : '护甲';
         return (
           <div

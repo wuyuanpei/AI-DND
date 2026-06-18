@@ -36,7 +36,7 @@ interface DialogueState {
   combatMonsterIds: string[];
   combatAttackPayload: AttackPayload | null;
   pendingAttack: AttackPayload | null;
-  pendingCombatResult: { outcome: 'victory' | 'defeat'; battleSummary?: string } | null;
+  pendingCombatResult: { outcome: 'victory' | 'defeat' | 'escape'; battleSummary?: string } | null;
   // New combat engine state
   combatMonsters: CombatMonsterState[];
   combatTurn: 'player' | 'monster';

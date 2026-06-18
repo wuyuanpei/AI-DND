@@ -33,6 +33,9 @@ export interface Item {
   effect?: string;          // 特殊效果描述
   durability?: number;      // 当前剩余使用次数
   maxDurability?: number;   // 持久度上限
+  defense?: number;         // 盾牌防御值
+  damageReduction?: number; // 头盔伤害减免百分比 (0.1 = 10%)
+  bonusHp?: number;         // 护甲额外生命值
   stats?: Record<string, number>;
 }
 

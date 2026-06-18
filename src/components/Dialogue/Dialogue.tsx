@@ -14,13 +14,12 @@ import { chatWithNPC } from '../../services/qwen';
 import { generateCharacterPortrait } from '../../services/imageGen';
 import { buildPortraitPrompt } from '../../config/imageConfig';
 import type { ChatMessage } from '../../services/qwen';
-import type { DialogueMessage, Item } from '../../types';
+import type { DialogueMessage, Item, WeaponPreset, ArmorPreset } from '../../types';
 import type { CharacterData } from '../../store/playerStore';
 import { parseLLMJson } from '../../utils/parseLLMJson';
 import {
   type CombatMonsterState,
   type CombatAction,
-  type AttackResult,
   resolvePlayerAttack,
   resolveMonsterAttack,
   buildPlayerAttackResolutionMessage,
@@ -159,34 +158,8 @@ const executeCombatAction = (action: CombatAction, isPlayerTurn: boolean, acting
   }
 };
 
-const getShopSystemPrompt = (shopWeapons: Array<Record<string, unknown>>, shopArmors: Array<Record<string, unknown>>, purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
-  const weapons = shopWeapons.map((w) => ({
-    id: w.id as string,
-    name: w.name as string,
-    weaponType: w.weaponType as 'melee' | 'ranged',
-    description: w.description as string,
-    rarity: w.rarity as string,
-    damage: w.damage as string,
-    durability: w.durability as number,
-    price: w.price as number,
-    effect: w.effect as string | undefined,
-    icon: w.icon as string,
-  }));
-  const armors = shopArmors.map((a) => ({
-    id: a.id as string,
-    name: a.name as string,
-    armorType: a.armorType as 'helmet' | 'chest' | 'shield',
-    description: a.description as string,
-    rarity: a.rarity as string,
-    defense: a.defense as number | undefined,
-    damageReduction: a.damageReduction as number | undefined,
-    bonusHp: a.bonusHp as number | undefined,
-    durability: a.durability as number,
-    price: a.price as number,
-    effect: a.effect as string | undefined,
-    icon: a.icon as string,
-  }));
-  return buildSystemPrompt(buildShopSystemPrompt(weapons, armors, purchasedWeaponIds, purchasedArmorIds));
+const getShopSystemPrompt = (shopWeapons: WeaponPreset[], shopArmors: ArmorPreset[], purchasedWeaponIds: Set<string>, purchasedArmorIds: Set<string>): string => {
+  return buildSystemPrompt(buildShopSystemPrompt(shopWeapons, shopArmors, purchasedWeaponIds, purchasedArmorIds));
 };
 
 const dmPhaseToHistoryKey = (phase: DMPhase): string => {
@@ -339,12 +312,12 @@ const Dialogue: React.FC = () => {
   useEffect(() => {
     if (store.dmPhase !== 'shop' || (store.shopWeapons.length > 0 && store.shopArmors.length > 0)) return;
     (async () => {
-      const allWeapons = (weaponsData as { weapons: Array<Record<string, unknown>> }).weapons;
-      const allArmors = (armorsData as { armors: Array<Record<string, unknown>> }).armors;
+      const allWeapons = (weaponsData as { weapons: WeaponPreset[] }).weapons;
+      const allArmors = (armorsData as { armors: ArmorPreset[] }).armors;
 
       // 恢复武器
       const savedWeaponIds = await loadShopWeaponIds();
-      let restoredWeapons: Array<Record<string, unknown>> = [];
+      let restoredWeapons: WeaponPreset[] = [];
       if (savedWeaponIds && savedWeaponIds.length === 9) {
         const idSet = new Set(savedWeaponIds);
         restoredWeapons = allWeapons.filter((w) => idSet.has(w.id));
@@ -384,7 +357,7 @@ const Dialogue: React.FC = () => {
       };
 
       const savedArmorIds = await loadShopArmorIds();
-      let restoredArmors: Array<Record<string, unknown>> = [];
+      let restoredArmors: ArmorPreset[] = [];
       if (savedArmorIds && savedArmorIds.length === 9) {
         const armorIdSet = new Set(savedArmorIds);
         restoredArmors = allArmors.filter((a) => armorIdSet.has(a.id));
@@ -679,8 +652,8 @@ const Dialogue: React.FC = () => {
         const playerGold = usePlayerStore.getState().gold;
 
         // 验证所有要购买的装备
-        const validWeapons: Array<{ w: Record<string, unknown>; price: number }> = [];
-        const validArmors: Array<{ a: Record<string, unknown>; price: number }> = [];
+        const validWeapons: Array<{ w: WeaponPreset; price: number }> = [];
+        const validArmors: Array<{ a: ArmorPreset; price: number }> = [];
         let totalPrice = 0;
         let failedReason = '';
 
@@ -691,7 +664,7 @@ const Dialogue: React.FC = () => {
               failedReason = `装备 "${weapon.name}" 已售罄`;
               break;
             }
-            const price = weapon.price as number;
+            const price = weapon.price;
             totalPrice += price;
             validWeapons.push({ w: weapon, price });
             continue;
@@ -702,7 +675,7 @@ const Dialogue: React.FC = () => {
               failedReason = `装备 "${armor.name}" 已售罄`;
               break;
             }
-            const price = armor.price as number;
+            const price = armor.price;
             totalPrice += price;
             validArmors.push({ a: armor, price });
             continue;
@@ -734,43 +707,43 @@ const Dialogue: React.FC = () => {
         for (const { w, price } of validWeapons) {
           const item: Item = {
             id: w.id,
-            name: w.name as string,
-            type: (w.weaponType === 'melee' ? 'mainWeapon' : 'ranged') as Item['type'],
-            description: w.description as string,
-            rarity: w.rarity as string,
-            weaponType: w.weaponType as 'melee' | 'ranged',
-            damage: w.damage as string,
-            durability: w.durability as number,
-            maxDurability: w.durability as number,
+            name: w.name,
+            type: w.weaponType === 'melee' ? 'mainWeapon' : 'ranged',
+            description: w.description,
+            rarity: w.rarity,
+            weaponType: w.weaponType,
+            damage: w.damage,
+            durability: w.durability,
+            maxDurability: w.durability,
             price,
-            effect: w.effect as string | undefined,
-            icon: w.icon as string,
+            effect: w.effect,
+            icon: w.icon,
           };
           usePlayerStore.getState().addItem(item);
           newPurchasedW.add(w.id);
-          purchasedNames.push(w.name as string);
+          purchasedNames.push(w.name);
         }
 
         for (const { a, price } of validArmors) {
           const type = a.armorType === 'helmet' ? 'helmet' : a.armorType === 'chest' ? 'chest' : 'shield';
           const item: Item = {
             id: a.id,
-            name: a.name as string,
+            name: a.name,
             type: type as Item['type'],
-            description: a.description as string,
-            rarity: a.rarity as string,
-            damageReduction: a.damageReduction as number | undefined,
-            bonusHp: a.bonusHp as number | undefined,
-            defense: a.defense as number | undefined,
-            durability: a.durability as number,
-            maxDurability: a.durability as number,
+            description: a.description,
+            rarity: a.rarity,
+            damageReduction: a.damageReduction,
+            bonusHp: a.bonusHp,
+            defense: a.defense,
+            durability: a.durability,
+            maxDurability: a.durability,
             price,
-            effect: a.effect as string | undefined,
-            icon: a.icon as string,
+            effect: a.effect,
+            icon: a.icon,
           };
           usePlayerStore.getState().addItem(item);
           newPurchasedA.add(a.id);
-          purchasedNames.push(a.name as string);
+          purchasedNames.push(a.name);
         }
 
         useDialogueStore.setState({ purchasedWeaponIds: newPurchasedW, purchasedArmorIds: newPurchasedA });

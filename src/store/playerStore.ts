@@ -155,7 +155,7 @@ const initialPlayerState = {
   avatar: undefined,
 };
 
-export const usePlayerStore = create<PlayerState>((set, get) => ({
+export const usePlayerStore = create<PlayerState>((set) => ({
   ...initialPlayerState,
 
   setName: (name) => set({ name }),
@@ -319,7 +319,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   }),
   organizeInventory: () => set((state) => {
     const items = Object.entries(state.inventory)
-      .map(([slot, item]) => item as Item)
+      .map(([, item]) => item as Item)
       .filter(Boolean);
 
     const categoryOrder = ['melee', 'ranged', 'helmet', 'chest', 'shield', 'consumable', 'other'];

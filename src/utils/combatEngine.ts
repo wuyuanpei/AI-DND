@@ -63,7 +63,7 @@ export interface AttackResult {
 export function resolvePlayerAttack(
   action: CombatAction,
   playerStrength: number,
-  playerAgility: number,
+  _playerAgility: number,
   monsters: CombatMonsterState[],
   skillDamage?: string
 ): AttackResult {
