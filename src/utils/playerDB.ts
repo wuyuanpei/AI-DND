@@ -1,7 +1,7 @@
 import type { DialogueMessage } from '../types';
 
 const DB_NAME = 'ai-dnd-player';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const PLAYER_STORE = 'playerData';
 const LOGS_STORE = 'gameLogs';
 const DIALOGUE_STORE = 'dialogueHistory';

@@ -13,6 +13,7 @@ const DEEPSEEK_MODELS = [
 ];
 
 const IMAGE_MODELS = [
+  'qwen-image-2.0-pro-2026-04-22',
   'qwen-image-2.0-pro',
   'qwen-image-2.0',
 ];

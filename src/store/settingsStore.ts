@@ -12,7 +12,7 @@ const IMAGE_API_KEY_STORAGE_KEY = 'ai-dnd-image-api-key';
 const IMAGE_MODEL_STORAGE_KEY = 'ai-dnd-image-model';
 
 export const IMAGE_API_URL = '/api/image-gen';
-export const IMAGE_MODEL = 'qwen-image-2.0-pro';
+export const IMAGE_MODEL = 'qwen-image-2.0-pro-2026-04-22';
 
 export type Provider = 'qwen' | 'deepseek';
 
